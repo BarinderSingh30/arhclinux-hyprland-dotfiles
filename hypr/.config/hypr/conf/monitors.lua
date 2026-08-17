@@ -12,9 +12,7 @@
 local LAPTOP   = "eDP-1"
 local EXTERNAL = "HDMI-A-1"
 
--- Layout: laptop on the LEFT, external to its RIGHT (preserves the arrangement
--- that was already in use). eDP-1 is 1536 logical px wide, so the external
--- starts at x=1536. To flip them, swap the two position strings.
+-- Layout: laptop on the BOTTOM, external to its TOP
 hl.monitor({
     output   = LAPTOP,
     mode     = "1920x1080@60",
@@ -25,7 +23,7 @@ hl.monitor({
 hl.monitor({
     output   = EXTERNAL,
     mode     = "1440x900@60",
-    position = "1536x0",
+    position = "0x-900",
     scale    = 1,
 })
 

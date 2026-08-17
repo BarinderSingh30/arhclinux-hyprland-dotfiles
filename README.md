@@ -92,12 +92,39 @@ Everything except `conf/theme.lua` is build product and is not tracked here.
 |---|---|
 | `theme-set` | render every config from one palette (see above) |
 | `clip-menu` | clipboard history in rofi — `--delete` removes one entry, `--wipe` erases all |
-| `keybind-help` | keybind cheatsheet in rofi — `--print` for plain stdout |
+| `cheatsheet` | menu of reference sheets in rofi — `cheatsheet <sheet>` opens one, `--print` for plain stdout |
 
-`keybind-help` builds its list from `hyprctl binds -j`, so it is generated from the compositor's
-live state and cannot drift from `conf/binds.lua`. The trade: a bind only appears if it was given a
-`desc`. `modmask` is a bitmask (`1` SHIFT, `4` CTRL, `8` ALT, `64` SUPER), confirmed against this
-config's own binds.
+### cheatsheet
+
+`SUPER + /`. A menu of three sheets; Escape inside a sheet goes back to the menu, Escape at the menu
+quits. **Every sheet is generated from the thing it documents** — none is hand-written, so none can
+drift when the config changes:
+
+| Sheet | Source | Cost |
+|---|---|---|
+| hyprland | `hyprctl binds -j` — the compositor's live bind table | 11 ms |
+| zsh | `zsh -i -c 'bindkey; alias'` — a real interactive shell | 32 ms |
+| yazi | the preset keymap embedded in `/usr/bin/yazi` | 19 ms |
+
+Notes on each, in the order they will bite someone editing this:
+
+- **hyprland** — a bind appears only if it was given a `desc` in `conf/binds.lua`. `modmask` is a
+  bitmask (`1` SHIFT, `4` CTRL, `8` ALT, `64` SUPER), confirmed against this config's own binds.
+- **zsh** — filtered, because a raw `bindkey` dump is 146 lines. Dropped: `self-insert` and friends,
+  everything under the `^X` completion-internals prefix, and `_`-prefixed widget names (except our
+  own `_resume_job`). Widgets with no entry in the description table fall back to their own name
+  with the dashes removed, so a newly bound widget still shows up rather than vanishing.
+  Alt sequences keep their case — `^[c` and `^[C` are *different* bindings (here fzf-cd-widget and
+  capitalize-word); Ctrl sequences are upper-cased because `^a` and `^A` are genuinely the same byte.
+- **yazi** — yazi 26.x ships no keymap file (`pacman -Ql yazi` lists none) and has no dump command;
+  the preset `keymap.toml` is compiled in with `include_str!` and sits in the binary as plain text.
+  Read with `grep -a`, not `strings`: 7 ms vs 210 ms on a 23 MB binary, and grep is in `base` while
+  binutils is not. Only the `[mgr]` section is shown — press `~` inside yazi for its own help.
+
+Two things to know before editing the script: the awk programs live inside single-quoted shell
+strings, so **they cannot contain an apostrophe even in a comment** (this cost a debugging round);
+and the hyprland `jq` program is in a quoted heredoc for exactly that reason — its key table has to
+contain a literal `'`.
 
 **Binds must call these by absolute path.** Hyprland does not spawn commands through a login shell,
 so `~/.zshenv` never runs and `~/.local/bin` is *not* on the PATH:

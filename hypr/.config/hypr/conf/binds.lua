@@ -134,15 +134,17 @@ hl.bind(mod .. " + SHIFT + V", hl.dsp.exec_cmd(bin .. "clip-menu"),
 hl.bind(mod .. " + SHIFT + P", hl.dsp.exec_cmd("hyprpicker -a -l -n"),
     { desc = "Pick a color (hex to clipboard)" })
 
--- Every bind in this file, listed from the live compositor. See keybind-help.
-hl.bind(mod .. " + slash", hl.dsp.exec_cmd(bin .. "keybind-help"),
-    { desc = "Show this cheatsheet" })
+-- Menu of reference sheets: these binds, the zsh keys and aliases, and the
+-- yazi keymap. Each one is generated from the live thing it documents rather
+-- than written down, so none of them can go stale. See scripts/cheatsheet.
+hl.bind(mod .. " + slash", hl.dsp.exec_cmd(bin .. "cheatsheet"),
+    { desc = "Cheatsheets (hyprland / zsh / yazi)" })
 
 --------------------------------------------------------------------------
 -- Hardware keys
 --   locked = true so they still work while the screen is locked.
 --
---   Each carries a desc purely so it shows up in keybind-help. That script
+--   Each carries a desc purely so it shows up in the cheatsheet. That script
 --   only lists binds that have one, and "which key mutes the mic" is exactly
 --   the sort of thing worth being able to look up.
 --------------------------------------------------------------------------

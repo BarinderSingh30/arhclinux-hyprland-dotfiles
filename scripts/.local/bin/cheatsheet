@@ -1,0 +1,399 @@
+#!/usr/bin/env bash
+#
+# cheatsheet -- one menu, several reference sheets.
+#
+#   cheatsheet                    # menu of sheets
+#   cheatsheet hyprland|zsh|yazi  # open one directly
+#   cheatsheet --print [sheet]    # plain text on stdout (all sheets if omitted)
+#
+# Every sheet is GENERATED from the thing it documents, never hand-written:
+#
+#   hyprland  <- hyprctl binds -j          (the compositor's live bind table)
+#   zsh       <- zsh -i -c 'bindkey; alias' (a real interactive shell)
+#   yazi      <- the preset keymap embedded in /usr/bin/yazi
+#
+# That is the whole point. A hand-maintained cheatsheet is wrong within a week
+# of the config changing and there is nothing to warn you. These cannot drift:
+# change a bind, reopen the sheet, it is already correct.
+
+set -euo pipefail
+
+# Alignment counts CHARACTERS, and the arrow glyphs below are multi-byte. awk
+# only counts characters (rather than bytes) in a UTF-8 locale. Hyprland does
+# pass LANG=en_US.UTF-8 down to what it spawns -- but this script should not
+# have to depend on that being true, so pin it. C.UTF-8 is always present on
+# glibc.
+export LC_ALL=C.UTF-8
+
+die() { printf '\033[31mcheatsheet:\033[0m %s\n' "$*" >&2; exit 1; }
+
+command -v rofi >/dev/null || die "rofi not found"
+command -v jq   >/dev/null || die "jq not found (pacman -S jq)"
+
+# ===========================================================================
+# Shared formatting
+#
+# Every sheet emits TAB-separated "key<TAB>description" lines. align() is the
+# single place that turns those into padded columns, so the sheets all look
+# alike and none of them has to think about widths.
+# ===========================================================================
+align() {
+    awk -F'\t' '
+        { k[NR] = $1; d[NR] = $2
+          if (length($1) > max && length($1) <= 26) max = length($1) }
+        END {
+            for (i = 1; i <= NR; i++) {
+                # A separator row is a lone key with no description; print it
+                # as-is so section rules stay flush left.
+                if (d[i] == "") { print k[i]; continue }
+                pad = max - length(k[i]); if (pad < 0) pad = 0
+                printf "%s%*s  %s\n", k[i], pad, "", d[i]
+            }
+        }
+    '
+}
+
+# A section rule. Rows like this exist only to break the list up visually --
+# they are selectable in rofi and do nothing, which is harmless.
+rule() { printf '\n── %s ──\n' "$1"; }
+
+# ===========================================================================
+# Sheet: Hyprland
+# ===========================================================================
+sheet_hyprland() {
+    command -v hyprctl >/dev/null || { echo "hyprctl not found -- not a Hyprland session"; return; }
+
+    # modmask is a bitmask, not a name. Values are the standard X11/xkb
+    # modifier masks, confirmed against this config's own binds: SUPER+Q
+    # reports 64, SUPER+SHIFT+left reports 65.
+    #   1 SHIFT  2 CAPS  4 CTRL  8 ALT  16 MOD2  32 MOD3  64 SUPER  128 MOD5
+    #
+    # Held in a quoted heredoc, not inline in '...', because the key table
+    # below has to contain a literal apostrophe -- and a single-quoted shell
+    # string is the one thing that cannot.
+    local JQ
+    read -r -d '' JQ <<'JQEOF' || true
+      def bit($m; $b): (($m / $b) | floor) % 2 == 1;
+      def combo($m):
+        [ (if bit($m;64) then "SUPER" else empty end),
+          (if bit($m;4)  then "CTRL"  else empty end),
+          (if bit($m;8)  then "ALT"   else empty end),
+          (if bit($m;1)  then "SHIFT" else empty end) ] | join(" + ");
+      def prettykey($k):
+        { "left":"←", "right":"→", "up":"↑", "down":"↓",
+          "PRINT":"Print", "slash":"/", "bracketleft":"[", "bracketright":"]",
+          "comma":",", "period":".", "semicolon":";", "apostrophe":"'",
+          "minus":"-", "equal":"=", "grave":"`", "space":"Space",
+          "Return":"Enter", "Escape":"Esc", "Tab":"Tab" }[$k]
+        // ($k | sub("^XF86"; ""));
+
+      [ .[]
+        | select(.has_description and (.description | length > 0))
+        | select(.mouse | not)
+        | { mm: .modmask, mods: combo(.modmask), key: prettykey(.key), desc: .description } ]
+
+      # Ten near-identical workspace binds are ten lines of noise. Collapse any
+      # group sharing a modifier combo whose descriptions differ only by a
+      # trailing number. Generic: no bind name is hardcoded.
+      | group_by([.mods, (.desc | sub("[ 0-9]+$"; ""))])
+      | map(if length == 1 then .[0]
+            else { mm: .[0].mm, mods: .[0].mods,
+                   key: (map(.key) | join(" ")),
+                   desc: (.[0].desc | sub("[ 0-9]+$"; "")) } end)
+      | sort_by([.mm, .desc])
+      | .[]
+      | [ (if .mods == "" then .key else .mods + " + " + .key end), .desc ]
+      | @tsv
+JQEOF
+
+    hyprctl binds -j 2>/dev/null | jq -r "$JQ" || echo "could not read binds from hyprctl"
+}
+
+# ===========================================================================
+# Sheet: zsh
+#
+# Read out of a real interactive shell, so it reflects conf/*.zsh as loaded
+# rather than as intended. One fork does both lists; a marker line splits them.
+#
+# stderr is dropped: `zsh -i -c` with no tty makes zle print "can't change
+# option: zle" from the zoxide and starship init hooks. Confirmed harmless --
+# it does not happen under a real terminal, only when there is no pty for zle
+# to attach to.
+# ===========================================================================
+sheet_zsh() {
+    command -v zsh >/dev/null || { echo "zsh not found"; return; }
+
+    local raw
+    raw=$(zsh -i -c 'bindkey; print "@@@ALIASES@@@"; alias' 2>/dev/null) \
+        || { echo "could not query zsh"; return; }
+
+    rule "keys"
+    printf '%s\n' "$raw" | awk '
+        /^@@@ALIASES@@@$/ { exit }
+
+        # Widgets that are noise in a cheatsheet: self-insert is bound to
+        # every printable character, and the others are internals.
+        { w = $NF }
+        w ~ /^(self-insert|undefined-key|digit-argument|bracketed-paste|vi-|neg-argument|universal-argument)/ { next }
+
+        # zsh ships a pile of widgets under the ^X prefix whose names begin
+        # with an underscore (_complete_debug, _read_comp, _correct_filename).
+        # They are completion-system internals, not things anyone drives by
+        # hand. _resume_job is ours, from conf/20-keys.zsh, so it stays.
+        w ~ /^_/ && w != "_resume_job" { next }
+
+        {
+            # bindkey prints:  "SEQ" widget
+            # so the sequence is everything between the quotes: total length
+            # minus the widget, minus two quotes and the separating space.
+            klen = length($0) - length(w) - 3
+            if (klen < 1) next
+            k = substr($0, 2, klen)
+
+            # ^X is the zsh prefix for completion internals. Whatever is left
+            # under it after the filter above is still not cheatsheet
+            # material -- ^X^K "kill buffer", ^X= "what cursor position".
+            # (No apostrophes in this awk program: it lives inside a
+            # single-quoted shell string, and a comment is no protection.)
+            if (k ~ /^\^X/) next
+
+            if (!(w in seen)) { order[++n] = w; seen[w] = "" }
+
+            p = pretty(k)
+
+            # The same widget is deliberately bound to several sequences --
+            # conf/20-keys.zsh binds both escape forms of every arrow, and
+            # Home has four. They collapse to one label, so dedupe or the row
+            # reads "Home Home Home Home".
+            id = w SUBSEP p
+            if (id in dup) next
+            dup[id] = 1
+
+            # Prefer sequences that have a human name. A widget only falls
+            # back to showing a raw escape sequence if it has no readable
+            # binding at all -- better than printing "^[^G" beside "Ctrl+G".
+            if (p != k) pr[w] = pr[w] (pr[w] == "" ? "" : " ") p
+            else        rw[w] = rw[w] (rw[w] == "" ? "" : " ") p
+        }
+
+        function pretty(s,   out) {
+            if (s == "^?")      return "Backspace"
+            if (s == "^I")      return "Tab"
+            if (s == "^M")      return "Enter"
+            if (s == "^[[Z")    return "Shift+Tab"
+            if (s == "^[[A" || s == "^[OA") return "↑"
+            if (s == "^[[B" || s == "^[OB") return "↓"
+            if (s == "^[[C" || s == "^[OC") return "→"
+            if (s == "^[[D" || s == "^[OD") return "←"
+            if (s == "^[[H" || s == "^[OH" || s == "^[[1~" || s == "^[[7~") return "Home"
+            if (s == "^[[F" || s == "^[OF" || s == "^[[4~" || s == "^[[8~") return "End"
+            if (s == "^[[3~")   return "Delete"
+            if (s == "^[[2~")   return "Insert"
+            if (s == "^[[1;5C") return "Ctrl+→"
+            if (s == "^[[1;5D") return "Ctrl+←"
+            if (s == "^[ ")     return "Alt+Space"
+
+            # bindkey backslash-escapes a quote in the sequence it prints.
+            gsub(/\\"/, "\"", s)
+
+            # ^[^X -> Alt+Ctrl+X
+            if (s ~ /^\^\[\^.$/) return "Alt+Ctrl+" toupper(substr(s, 4, 1))
+
+            # ^[x -> Alt+x   (escape-prefixed is how a terminal sends Alt)
+            #
+            # Case is PRESERVED here, unlike Ctrl below. ^[c and ^[C are two
+            # different bindings -- on this config they are fzf-cd-widget and
+            # capitalize-word -- so upper-casing them printed one label twice
+            # and hid the fact that they do different things.
+            if (s ~ /^\^\[.$/)  return "Alt+" substr(s, 3, 1)
+
+            # ^X -> Ctrl+X. Control characters genuinely are case-insensitive
+            # (^a and ^A are the same byte), so normalising to upper is right.
+            if (s ~ /^\^.$/)    return "Ctrl+" toupper(substr(s, 2, 1))
+            return s
+        }
+
+        # Descriptions for the widgets whose names do not explain themselves.
+        # Anything unlisted falls back to its widget name with the dashes
+        # turned into spaces, so a newly bound widget still shows up readably
+        # instead of vanishing.
+        function describe(w,   d) {
+            d["beginning-of-line"]              = "Jump to start of line"
+            d["end-of-line"]                    = "Jump to end of line"
+            d["backward-char"]                  = "Move left one character"
+            d["forward-char"]                   = "Move right one character"
+            d["backward-word"]                  = "Move left one word"
+            d["forward-word"]                   = "Move right one word"
+            d["backward-kill-word"]             = "Delete the word before the cursor"
+            d["kill-word"]                      = "Delete the word after the cursor"
+            d["kill-line"]                      = "Delete from cursor to end of line"
+            d["backward-kill-line"]             = "Delete from cursor to start of line"
+            d["kill-whole-line"]                = "Delete the whole line"
+            d["backward-delete-char"]           = "Delete character before the cursor"
+            d["delete-char"]                    = "Delete character under the cursor"
+            d["delete-char-or-list"]            = "Delete character, or list completions"
+            d["yank"]                           = "Paste what was last deleted"
+            d["yank-pop"]                       = "Cycle through earlier deletions"
+            d["undo"]                           = "Undo the last edit"
+            d["redo"]                           = "Redo"
+            d["clear-screen"]                   = "Clear the screen"
+            d["accept-line"]                    = "Run the command"
+            d["transpose-chars"]                = "Swap the two characters at the cursor"
+            d["transpose-words"]                = "Swap the two words at the cursor"
+            d["quoted-insert"]                  = "Insert the next keypress literally"
+            d["overwrite-mode"]                 = "Toggle insert / overwrite"
+            d["push-line"]                      = "Stash this line, run something else first"
+            d["push-input"]                     = "Stash the whole input"
+            d["expand-or-complete"]             = "Tab completion"
+            d["reverse-menu-complete"]          = "Previous item in the completion menu"
+            d["up-line-or-beginning-search"]    = "History back, matching what you typed"
+            d["down-line-or-beginning-search"]  = "History forward, matching what you typed"
+            d["history-incremental-search-backward"] = "Incremental history search"
+            d["fzf-completion"]                 = "Fuzzy Tab completion"
+            d["fzf-history-widget"]             = "Fuzzy-search command history"
+            d["fzf-file-widget"]                = "Fuzzy-pick a file, paste its path"
+            d["fzf-cd-widget"]                  = "Fuzzy-pick a directory and cd there"
+            d["_resume_job"]                    = "Resume the job suspended with Ctrl+Z"
+            d["set-mark-command"]               = "Set the selection mark"
+            if (w in d) return d[w]
+            gsub(/[-_]/, " ", w)
+            return toupper(substr(w, 1, 1)) substr(w, 2)
+        }
+
+        END {
+            for (i = 1; i <= n; i++) {
+                w = order[i]
+                keys = (pr[w] != "" ? pr[w] : rw[w])
+                if (keys != "") printf "%s\t%s\n", keys, describe(w)
+            }
+        }
+    '
+
+    rule "aliases"
+    printf '%s\n' "$raw" | awk '
+        f { sub(/=/, "\t"); gsub(/\t\047|\047$/, "\t"); sub(/\t$/, ""); print }
+        /^@@@ALIASES@@@$/ { f = 1 }
+    ' | sed "s/\t'/\t/; s/'$//"
+}
+
+# ===========================================================================
+# Sheet: yazi
+#
+# yazi 26.x ships NO keymap file -- `pacman -Ql yazi` lists none, and there is
+# no dump command. The preset keymap.toml is compiled into the binary with
+# include_str!, which leaves it sitting there as plain text, so it can be read
+# straight back out of /usr/bin/yazi.
+#
+# grep -a rather than `strings`: 30x faster on a 23 MB binary (7ms vs 210ms),
+# and grep is in `base` while binutils is not.
+#
+# Only the [mgr] section is shown -- that is the file browser itself. yazi also
+# has keymaps for its input/pick/completion popups, which are modal and mostly
+# obvious. Press ~ inside yazi for its own built-in help.
+# ===========================================================================
+sheet_yazi() {
+    command -v yazi >/dev/null || { echo "yazi not found"; return; }
+    local bin; bin=$(command -v yazi)
+
+    grep -a -E '#:schema|^\[[a-z]+\]$|^	# [A-Z]|^	\{ on = ' "$bin" | awk '
+        # The binary embeds several TOMLs (yazi.toml, theme.toml, keymap.toml)
+        # and they all have a [mgr] section, so the schema line is what says
+        # which file the following lines belong to.
+        /#:schema/ { inkm = ($0 ~ /keymap\.json/); next }
+        !inkm      { next }
+        /^\[[a-z]+\]$/ { sect = substr($0, 2, length($0) - 2); next }
+        sect != "mgr"  { next }
+        /^\t# [A-Z]/   { label = substr($0, 4); next }
+
+        /^\t\{ on = / {
+            if (match($0, /on = \[[^]]*\]/)) {
+                # Multi-key sequence: on = [ "g", "g" ] -> gg
+                keys = substr($0, RSTART + 6, RLENGTH - 6); gsub(/[][", ]/, "", keys)
+            } else if (match($0, /on = "[^"]*"/)) {
+                keys = substr($0, RSTART + 6, RLENGTH - 6); gsub(/"/, "", keys)
+            } else next
+            if (!match($0, /desc = "[^"]*"/)) next
+            desc = substr($0, RSTART + 8, RLENGTH - 9)
+
+            keys = pretty(keys)
+            full = (label == "" ? desc : desc "  (" label ")")
+
+            # Same collapse as the other sheets: k and <Up> are both
+            # "Previous file", so show them on one row.
+            if (!(full in seen)) { order[++n] = full; seen[full] = "" }
+            seen[full] = seen[full] (seen[full] == "" ? "" : " ") keys
+        }
+
+        function pretty(s) {
+            if (s == "<Up>")    return "↑"
+            if (s == "<Down>")  return "↓"
+            if (s == "<Left>")  return "←"
+            if (s == "<Right>") return "→"
+            gsub(/<C-/, "Ctrl+<", s)
+            gsub(/<S-/, "Shift+<", s)
+            gsub(/<A-/, "Alt+<", s)
+            gsub(/[<>]/, "", s)
+            return s
+        }
+
+        END { for (i = 1; i <= n; i++) printf "%s\t%s\n", seen[order[i]], order[i] }
+    '
+}
+
+# ===========================================================================
+# Presentation
+# ===========================================================================
+show() {
+    local title=$1 body
+    body=$("sheet_$1" | align)
+    [[ -n $body ]] || body="(nothing to show)"
+    printf '%s\n' "$body" | rofi -dmenu \
+        -p "$title" -no-show-icons -no-custom -l 24 \
+        -theme-str 'window { width: 66em; } listview { lines: 24; }' \
+        >/dev/null || return 1
+    return 0
+}
+
+SHEETS=(hyprland zsh yazi)
+label_of() {
+    case $1 in
+        hyprland) echo "hyprland   window manager keybinds" ;;
+        zsh)      echo "zsh        shell keys and aliases" ;;
+        yazi)     echo "yazi       file manager keys" ;;
+    esac
+}
+
+menu() {
+    local s
+    for s in "${SHEETS[@]}"; do label_of "$s"; done | rofi -dmenu \
+        -p "cheatsheet" -no-show-icons -no-custom -l 3 \
+        -theme-str 'window { width: 40em; } listview { lines: 3; }'
+}
+
+case "${1:-}" in
+    --help|-h) sed -n '3,7p' "$0" | sed 's/^# \?//'; exit 0 ;;
+    --print|-p)
+        if [[ -n ${2:-} ]]; then
+            printf '%s\n' "$2" | grep -qxF -f <(printf '%s\n' "${SHEETS[@]}") \
+                || die "unknown sheet: $2 (try: ${SHEETS[*]})"
+            "sheet_$2" | align
+        else
+            for s in "${SHEETS[@]}"; do
+                printf '\n===== %s =====\n' "$s"; "sheet_$s" | align
+            done
+        fi
+        exit 0 ;;
+    hyprland|zsh|yazi) show "$1"; exit 0 ;;
+    "") ;;
+    *)  die "unknown sheet: $1 (try: ${SHEETS[*]})" ;;
+esac
+
+# Menu loop: Escape inside a sheet drops back to the menu, Escape at the menu
+# quits. Picking a row in a sheet does nothing -- these are for reading, and
+# firing "Close window" because you pressed Enter while browsing would be a
+# nasty surprise.
+while true; do
+    choice=$(menu) || break
+    [[ -n $choice ]] || break
+    show "${choice%% *}" || true
+done
