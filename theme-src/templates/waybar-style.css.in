@@ -30,6 +30,23 @@
 @define-color warning     #@WARNING@;
 @define-color good        #@GOOD@;
 
+/* Module accents.
+ *
+ * Deliberately separate from the semantic names above: `warning` has to keep
+ * meaning "something needs attention", so a module that merely happens to be
+ * yellow must not borrow it. Re-colour a module by changing the rule that
+ * uses these, not by redefining what warning means.
+ *
+ * Assignment runs left-to-right along the bar so no two neighbours sit next
+ * to each other on the colour wheel -- magenta, yellow, cyan, teal, orange --
+ * which is what stops it reading as a rainbow smear. Every value comes from
+ * the palette, so a theme switch recolours the whole row coherently. */
+@define-color cyan        #@CYAN@;
+@define-color teal        #@TEAL@;
+@define-color orange      #@ORANGE@;
+@define-color magenta     #@MAGENTA@;
+@define-color yellow      #@YELLOW@;
+
 /* -------------------------------------------------------------------------
  * Reset
  * ---------------------------------------------------------------------- */
@@ -82,45 +99,50 @@ tooltip label {
     margin: 0 4px;
 }
 
+/* Two states only: focused, and everything else.
+ *
+ * waybar exposes four separate classes here -- idle, .persistent (occupied),
+ * .visible (showing on the other monitor) and .active/.focused -- and giving
+ * each its own shade made the row read as a gradient of greys with no obvious
+ * meaning. All the non-focused ones are deliberately collapsed into one
+ * colour so the focused workspace is the only thing the eye has to find.
+ *
+ * To bring back the "occupied vs empty" distinction, give
+ * `#workspaces button.persistent` its own colour below the base rule. */
 #workspaces button {
     padding: 0 9px;
     margin: 0;
-    color: @muted;
+    color: @fg-dim;
     background-color: transparent;
     /* Reserve the underline on every button so text never shifts when the
-       active one gains it. */
+       focused one gains it. */
     box-shadow: inset 0 -2px transparent;
     transition: color 120ms ease, box-shadow 120ms ease;
 }
 
 #workspaces button:hover {
-    color: @fg-dim;
+    color: @fg;
     background-color: @bg-hl;
     box-shadow: inset 0 -2px @surface;
 }
 
-/* Occupied but not focused. */
-#workspaces button.persistent {
-    color: @fg-dim;
+/* Still shouts, because "needs attention" has to outrank looking tidy. */
+#workspaces button.urgent {
+    color: @urgent;
+    box-shadow: inset 0 -2px @urgent;
 }
 
-/* Focused on this monitor. */
+/* Focused, and LAST on purpose.
+ *
+ * GTK CSS resolves ties by source order, and .active/.visible/.urgent all
+ * have identical specificity. The previous version had .visible written after
+ * .active, so a workspace that was both focused and visible lost its accent
+ * to the dimmer rule. Keeping this rule at the bottom means focus always
+ * wins, whatever else the button happens to be. */
 #workspaces button.active,
 #workspaces button.focused {
     color: @accent;
     box-shadow: inset 0 -2px @accent;
-}
-
-/* Visible on the other monitor -- dimmer than focused, brighter than idle,
-   which matters with a permanent second screen. */
-#workspaces button.visible {
-    color: @fg;
-    box-shadow: inset 0 -2px @surface;
-}
-
-#workspaces button.urgent {
-    color: @urgent;
-    box-shadow: inset 0 -2px @urgent;
 }
 
 #submap {
@@ -131,19 +153,24 @@ tooltip label {
 /* -------------------------------------------------------------------------
  * Clock
  * ---------------------------------------------------------------------- */
+/* The clock is the one thing read constantly, so it gets the accent -- the
+   same blue as the focused window border and the active workspace, which ties
+   the bar to the rest of the desktop instead of adding a sixth hue. */
 #clock {
-    color: @fg;
+    color: @accent;
     font-weight: bold;
     padding: 0 12px;
 }
 
 #clock:hover {
-    color: @accent;
+    color: @fg;
 }
 
 /* -------------------------------------------------------------------------
  * Right-hand modules
  * ---------------------------------------------------------------------- */
+/* Shared geometry only. Colour is per-module below -- one flat grey for the
+   whole row is what made the bar look monotonous. */
 #tray,
 #wireplumber,
 #backlight,
@@ -152,21 +179,31 @@ tooltip label {
 #cpu,
 #battery {
     padding: 0 10px;
-    color: @fg-dim;
     background-color: transparent;
 }
+
+/* The row, in order. Colour carries the identity so the icons stay readable
+   at a glance without labels; the background stays flat and transparent,
+   because coloured pills behind every module is the thing that tips this from
+   classy into busy. */
+#wireplumber { color: @magenta; }
+#backlight   { color: @yellow;  }   /* yellow reads as "brightness" */
+#network     { color: @cyan;    }
+#memory      { color: @teal;    }
+#cpu         { color: @orange;  }
 
 /* Separator between the last module and the screen edge. */
 .modules-right > widget:last-child > * {
     padding-right: 14px;
 }
 
+/* Hover lifts the background only. Setting `color: @fg` here as well would
+   throw away the module colour at exactly the moment the pointer is on it. */
 #wireplumber:hover,
 #backlight:hover,
 #network:hover,
 #memory:hover,
 #cpu:hover {
-    color: @fg;
     background-color: @bg-hl;
 }
 
