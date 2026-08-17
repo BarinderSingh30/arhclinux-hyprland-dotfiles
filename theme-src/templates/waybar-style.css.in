@@ -46,7 +46,11 @@
 }
 
 window#waybar {
-    background-color: @bg-dark;
+    /* Transparency, set in the palette as BAR_OPACITY. alpha() is GTK's own
+       CSS function (GTK3 here -- waybar 0.15 links libgtk-3), so the colour
+       stays a single @define-color above and only its opacity is varied.
+       Writing an rgba() literal instead would mean duplicating the hex. */
+    background-color: alpha(@bg-dark, @BAR_OPACITY@);
     color: @fg;
     /* A hairline instead of a border: enough to separate the bar from a
        maximized window, invisible against the wallpaper. */

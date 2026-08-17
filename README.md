@@ -86,6 +86,35 @@ cannot execute anything.
 
 Everything except `conf/theme.lua` is build product and is not tracked here.
 
+### Transparency
+
+Two palette keys, so it travels with the theme like everything else:
+
+| Key | Applies to | Default |
+|---|---|---|
+| `TERM_OPACITY` | kitty `background_opacity` | `0.92` |
+| `BAR_OPACITY` | waybar, via GTK `alpha(@bg-dark, …)` | `0.85` |
+
+To change: edit the value in `theme-src/palettes/<name>.env`, run `theme-set`. The bar updates
+immediately. **kitty does not** — it applies `background_opacity` at startup, and per its own docs
+changing it on config reload only works if `dynamic_background_opacity` was enabled in the original
+config. That option is off by default because it carries a rendering cost, and paying it permanently
+on an Iris Plus G1 to avoid reopening a terminal is a bad trade. So already-open terminals keep the
+old value; a newly opened one is correct.
+
+Verify what kitty actually resolved, rather than guessing from a screenshot:
+
+```sh
+kitty +runpy 'from kitty.config import load_config; import os
+print(load_config(os.path.expanduser("~/.config/kitty/kitty.conf")).background_opacity)'
+```
+
+`alpha()` is GTK's own CSS function (waybar 0.15 links libgtk-3), so the bar colour stays a single
+`@define-color` and only its opacity varies — an `rgba()` literal would mean duplicating the hex.
+
+No blur anywhere: not kitty's `background_blur`, not `decoration.blur`. Blur is a per-frame GPU cost
+and this machine has an Iris Plus G1; transparency without it is free.
+
 ## scripts/
 
 | Script | What it does |
