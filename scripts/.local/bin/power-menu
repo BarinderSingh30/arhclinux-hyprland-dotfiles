@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+#
+# power-menu -- lock / suspend / log out / reboot / shut down, from rofi.
+#
+# Why a script rather than hyprshutdown: hyprshutdown is NOT a chooser. It is a
+# graceful-shutdown utility that closes apps and exits Hyprland, with an
+# optional --post-cmd to run afterwards. It has no menu of options, so the
+# SUPER+M bind that called it and was labelled "Power menu" never actually
+# offered a choice.
+#
+# The actions go through systemd-logind rather than hyprshutdown. logind is
+# what already tears down the session on shutdown, it is the battle-tested
+# path, and no untested tool sits in front of an action that cannot be undone.
+# Verified this session has permission, so none of these prompt for a password:
+#
+#   $ pkcheck --action-id org.freedesktop.login1.power-off --process $$
+#   ALLOWED   (same for .reboot and .suspend)
+#
+# ORDERING IS A SAFETY FEATURE. rofi highlights the first row, so a stray
+# Enter the moment the menu opens hits Lock -- the one entry that costs
+# nothing. The two irreversible actions are last, where nothing lands on them
+# by accident.
+
+set -euo pipefail
+
+die() { printf '\033[31mpower-menu:\033[0m %s\n' "$*" >&2; exit 1; }
+
+command -v rofi     >/dev/null || die "rofi not found"
+command -v loginctl >/dev/null || die "loginctl not found"
+
+# label <TAB> command, in menu order.
+entries() {
+    printf '%s\t%s\n' "󰌾  Lock"       "loginctl lock-session"
+    printf '%s\t%s\n' "󰤄  Suspend"    "systemctl suspend"
+    printf '%s\t%s\n' "󰗽  Log out"    "hyprctl dispatch 'hl.dsp.exit()'"
+    printf '%s\t%s\n' "󰜉  Reboot"     "systemctl reboot"
+    printf '%s\t%s\n' "󰐥  Shut down"  "systemctl poweroff"
+}
+
+case "${1:-}" in
+    --help|-h) sed -n '3,5p' "$0" | sed 's/^# \?//'; exit 0 ;;
+    "")        ;;
+    *)         die "unknown option: $1" ;;
+esac
+
+# -format i makes rofi print the ROW INDEX rather than the row text.
+#
+# Matching on the label instead looks simpler and is a trap: the labels start
+# with Nerd Font glyphs and contain runs of spaces, so any round-trip through
+# a shell read, or one stray space in the table, silently fails to match and
+# the entry does nothing. That is exactly what happened while building this --
+# Lock resolved to an empty command. An index cannot be mangled by whitespace.
+idx=$(entries | cut -f1 | rofi -dmenu \
+    -p "power" \
+    -no-show-icons \
+    -no-custom \
+    -format i \
+    -l 5 \
+    -theme-str 'window { width: 22em; } listview { lines: 5; }') || exit 0
+
+# Escape gives an empty index; a valid one is 0-based.
+[[ $idx =~ ^[0-9]+$ ]] || exit 0
+
+cmd=$(entries | sed -n "$((idx + 1))p" | cut -f2)
+[[ -n $cmd ]] || die "no command for row $idx"
+
+# exec so this script is not left hanging around as the parent of a shutdown.
+exec sh -c "$cmd"

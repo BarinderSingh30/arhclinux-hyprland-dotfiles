@@ -33,7 +33,12 @@ local bin = os.getenv("HOME") .. "/.local/bin/"
 hl.bind(mod .. " + Q", hl.dsp.exec_cmd(terminal),    { desc = "Terminal" })
 hl.bind(mod .. " + E", hl.dsp.exec_cmd(fileManager), { desc = "File manager" })
 hl.bind(mod .. " + R", hl.dsp.exec_cmd(menu),        { desc = "App launcher" })
-hl.bind(mod .. " + M", hl.dsp.exec_cmd("hyprshutdown"), { desc = "Power menu" })
+-- Was `hyprshutdown`, which is NOT a menu -- it is a graceful-shutdown
+-- utility that closes apps and exits Hyprland immediately, with no choice
+-- offered. Labelling that "Power menu" meant this key did something quite
+-- different from what the cheatsheet promised. Now it opens the same rofi
+-- menu as the power button in the bar.
+hl.bind(mod .. " + M", hl.dsp.exec_cmd(bin .. "power-menu"), { desc = "Power menu" })
 
 -- Lock. Goes through loginctl rather than calling hyprlock directly so logind
 -- marks the session locked; hypridle receives the resulting Lock signal and

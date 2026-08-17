@@ -38,14 +38,14 @@
  * uses these, not by redefining what warning means.
  *
  * Assignment runs left-to-right along the bar so no two neighbours sit next
- * to each other on the colour wheel -- magenta, yellow, cyan, teal, orange --
+ * to each other on the colour wheel -- magenta, cyan, teal, orange, purple --
  * which is what stops it reading as a rainbow smear. Every value comes from
  * the palette, so a theme switch recolours the whole row coherently. */
 @define-color cyan        #@CYAN@;
 @define-color teal        #@TEAL@;
 @define-color orange      #@ORANGE@;
 @define-color magenta     #@MAGENTA@;
-@define-color yellow      #@YELLOW@;
+@define-color purple      #@PURPLE@;
 
 /* -------------------------------------------------------------------------
  * Reset
@@ -173,11 +173,12 @@ tooltip label {
    whole row is what made the bar look monotonous. */
 #tray,
 #wireplumber,
-#backlight,
 #network,
 #memory,
 #cpu,
-#battery {
+#power-profiles-daemon,
+#battery,
+#custom-power {
     padding: 0 10px;
     background-color: transparent;
 }
@@ -186,11 +187,24 @@ tooltip label {
    at a glance without labels; the background stays flat and transparent,
    because coloured pills behind every module is the thing that tips this from
    classy into busy. */
-#wireplumber { color: @magenta; }
-#backlight   { color: @yellow;  }   /* yellow reads as "brightness" */
-#network     { color: @cyan;    }
-#memory      { color: @teal;    }
-#cpu         { color: @orange;  }
+#wireplumber            { color: @magenta; }
+#network                { color: @cyan;    }
+#memory                 { color: @teal;    }
+#cpu                    { color: @orange;  }
+#power-profiles-daemon  { color: @purple;  }
+
+/* The power button sits quiet until you reach for it. Colouring it red
+   permanently would put a standing alarm in the corner of a bar that is
+   otherwise calm -- and red already means "urgent" everywhere else here. */
+#custom-power {
+    color: @fg-dim;
+    padding-right: 12px;
+}
+
+#custom-power:hover {
+    color: @urgent;
+    background-color: @bg-hl;
+}
 
 /* Separator between the last module and the screen edge. */
 .modules-right > widget:last-child > * {
@@ -200,10 +214,10 @@ tooltip label {
 /* Hover lifts the background only. Setting `color: @fg` here as well would
    throw away the module colour at exactly the moment the pointer is on it. */
 #wireplumber:hover,
-#backlight:hover,
 #network:hover,
 #memory:hover,
-#cpu:hover {
+#cpu:hover,
+#power-profiles-daemon:hover {
     background-color: @bg-hl;
 }
 
