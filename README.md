@@ -2,6 +2,46 @@
 
 Arch + Hyprland config, managed with GNU Stow.
 
+## Start here
+
+The desktop is **finished and working**. Treat it as a system to make small changes to, not a
+project to restart. Before editing anything, know these three invariants — every design decision
+below follows from them:
+
+1. **Colors are defined in exactly one place per theme.** `theme-src/palettes/*.env`. Nothing else
+   contains a hex value. If you are about to type `#1a1b26` into a config, you are doing it wrong.
+2. **Configs that need colors are templates**, rendered by `theme-set`. Editing a generated file is
+   pointless — the next `theme-set` overwrites it. Edit the `.in` template.
+3. **The plan file is history, not instructions.** `~/.claude/plans/so-i-have-big-swift-nest.md`
+   describes how this got built, phase by phase. All seven phases are done. Read it for *why* a
+   decision was made; do not re-execute it.
+
+Where to make a given change:
+
+| I want to change… | Edit… | Then run |
+|---|---|---|
+| any color, or transparency | `theme-src/palettes/<name>.env` | `theme-set` |
+| how an app uses those colors | `theme-src/templates/<app>.in` | `theme-set` |
+| keybinds | `hypr/.config/hypr/conf/binds.lua` | `hyprctl reload` |
+| gaps, borders, blur, animations | `hypr/.config/hypr/conf/{decorations,animations}.lua` | `hyprctl reload` |
+| monitors, workspaces, input | `hypr/.config/hypr/conf/{monitors,workspaces,input}.lua` | `hyprctl reload` |
+| what starts at login | `hypr/.config/hypr/conf/autostart.lua` | log out / in |
+| which modules are in the bar | `waybar/.config/waybar/config.jsonc` | restart waybar |
+| how the bar looks | `theme-src/templates/waybar-style.css.in` | `theme-set` |
+| shell behaviour, aliases, keys | `zsh/.config/zsh/conf/*.zsh` | `exec zsh` |
+| the launcher | `rofi/.config/rofi/config.rasi` | nothing |
+| terminal behaviour (not color) | `kitty/.config/kitty/kitty.conf` | new kitty window |
+
+**Read "System notes" at the bottom before debugging anything that "should work".** Every entry
+there is a trap that already cost a debugging session — Hyprland spawning commands without your
+PATH, rofi caching the app list forever, a fixed-height rofi window, `hyprctl dispatch` taking Lua
+now. They look like bugs in your change and are not.
+
+Adding a new themed app, end to end: add a template to `theme-src/templates/`, add its destination
+to the `targets()` heredoc in `scripts/.local/bin/theme-set`, add any new `@KEY@` to **both**
+palettes, run `theme-set`. It fails loudly if a marker has no value, so a missed key cannot reach a
+live config.
+
 ## Layout
 
 Each top-level directory is a **stow package** whose internal structure mirrors `$HOME`:
