@@ -121,6 +121,24 @@ Notes on each, in the order they will bite someone editing this:
   Read with `grep -a`, not `strings`: 7 ms vs 210 ms on a 23 MB binary, and grep is in `base` while
   binutils is not. Only the `[mgr]` section is shown — press `~` inside yazi for its own help.
 
+**Window height is computed at runtime**, not fixed. A hard `lines: 24` renders a 922px window and
+eDP-1 is only 864 logical pixels tall (1080 at scale 1.25), so sheets clipped off the bottom.
+`window { height: 80%; }` is *not* the fix — rofi treats it as a fixed height, so the 3-row menu
+would also render 696px tall with a large empty box. `max_lines()` instead sizes by row count, which
+keeps rofi's shrink-to-fit, using a measured model:
+
+```
+window height = 36px per row + 58px chrome     (measured: 24 rows→922px, 18 rows→706px)
+lines         = (logical_screen_height * 88% - 58) / 36
+```
+
+88% leaves margin, and is the safety net if the font in `config.rasi` changes and 36px stops being
+right. eDP-1 gets 19 rows (742px), HDMI-A-1 gets 20 (778px). Verify a change with:
+
+```sh
+hyprctl layers -j | jq -r '..|objects|select(.namespace?=="rofi")|"\(.w)x\(.h)"'
+```
+
 Two things to know before editing the script: the awk programs live inside single-quoted shell
 strings, so **they cannot contain an apostrophe even in a comment** (this cost a debugging round);
 and the hyprland `jq` program is in a quoted heredoc for exactly that reason — its key table has to

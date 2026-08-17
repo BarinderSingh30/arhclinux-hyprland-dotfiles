@@ -343,13 +343,50 @@ sheet_yazi() {
 # ===========================================================================
 # Presentation
 # ===========================================================================
+# How many rows fit on the screen rofi is about to open on.
+#
+# A fixed line count does not work: 24 lines renders a 922px window, and eDP-1
+# is only 864 logical pixels tall (1080 at scale 1.25), so the sheet hung off
+# the top and clipped at the bottom.
+#
+# `window { height: 80%; }` looks like the obvious fix and is not -- rofi
+# treats it as a FIXED height, so a three-row menu also renders 696px tall with
+# a large empty box under it. Sizing by line count keeps the shrink-to-fit
+# behaviour (config.rasi sets listview fixed-height: false) while staying on
+# screen.
+#
+# The model was measured, not guessed: lines=24 gave 922px and lines=18 gave
+# 706px, so each row is (922-706)/6 = 36px and the surrounding chrome (input
+# bar, padding) is 922-24*36 = 58px. Both data points fit 36n+58 exactly.
+#
+# 88% of the screen leaves margin, which is also the safety net if the font in
+# config.rasi is ever changed and 36px stops being right.
+max_lines() {
+    local logical
+    logical=$(hyprctl monitors -j 2>/dev/null \
+        | jq -r 'first(.[] | select(.focused) | (.height / .scale | floor))' 2>/dev/null) || logical=""
+
+    # No compositor to ask (running from a plain terminal, say): pick a value
+    # that fits a 768px-tall screen, the smallest thing likely in use.
+    [[ $logical =~ ^[0-9]+$ ]] || logical=768
+
+    local n=$(( (logical * 88 / 100 - 58) / 36 ))
+    (( n < 8 ))  && n=8
+    (( n > 30 )) && n=30
+    printf '%s' "$n"
+}
+
 show() {
-    local title=$1 body
+    local title=$1 body lines
     body=$("sheet_$1" | align)
     [[ -n $body ]] || body="(nothing to show)"
+    lines=$(max_lines)
+
+    # A scrollbar, unlike the launcher: these sheets are 40-100 rows and only
+    # ~19 are visible, so there has to be some sign that the list continues.
     printf '%s\n' "$body" | rofi -dmenu \
-        -p "$title" -no-show-icons -no-custom -l 24 \
-        -theme-str 'window { width: 66em; } listview { lines: 24; }' \
+        -p "$title" -no-show-icons -no-custom -l "$lines" \
+        -theme-str "window { width: 66em; } listview { lines: $lines; scrollbar: true; }" \
         >/dev/null || return 1
     return 0
 }
