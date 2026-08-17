@@ -23,4 +23,9 @@ hl.on("hyprland.start", function()
     -- Bar. Two bar objects (eDP-1 and HDMI-A-1) live in one config file, so
     -- this single process drives both screens.
     hl.exec_cmd("waybar")
+
+    -- Idle daemon: dim, lock, blank. Also the D-Bus listener that turns
+    -- `loginctl lock-session` (SUPER+L, and lock-before-suspend) into an
+    -- actual hyprlock. Reads ~/.config/hypr/hypridle.conf.
+    hl.exec_cmd("hypridle")
 end)

@@ -18,6 +18,13 @@ scripts/.local/bin/     → ~/.local/bin/
 There is no `mako` package: mako's config has no useful non-color content, so the whole file is
 generated (see below).
 
+`system/` is **not** a stow package either — it holds root-owned config that lives outside `$HOME`
+and is installed explicitly:
+
+```sh
+sudo install -Dm644 ~/dotfiles/system/greetd/config.toml /etc/greetd/config.toml
+```
+
 ## Usage
 
 ```sh
@@ -58,6 +65,7 @@ cannot execute anything.
 | `~/.config/{waybar/style.css,mako/config,gtk-3.0,gtk-4.0,qt6ct}` | no include mechanism (GTK, qt6ct, mako) or a symlink-fragile one (waybar's GTK CSS needs an absolute `file://`). Whole file generated; the template is the source of truth |
 | `hypr/.config/hypr/conf/theme.lua` — **in this repo** | a bare clone + stow must boot a working compositor before theme-set has ever run. A broken `hyprland.lua` means no desktop |
 | `~/.config/hypr/hyprpaper.conf` | hyprpaper doesn't expand `~`, so the absolute path is substituted in |
+| `~/.config/hypr/hyprlock.conf` | no include mechanism, and the lock screen should follow the palette |
 | `~/.config/theme/wallpaper.jpg` | the palette's `WALLPAPER` image, downscaled to 1920x1080 — hyprpaper decodes to an uncompressed surface, so a 4K source would cost ~32 MB of RAM per output |
 
 Everything except `conf/theme.lua` is build product and is not tracked here.

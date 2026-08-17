@@ -20,6 +20,14 @@ hl.bind(mod .. " + E", hl.dsp.exec_cmd(fileManager), { desc = "File manager" })
 hl.bind(mod .. " + R", hl.dsp.exec_cmd(menu),        { desc = "App launcher" })
 hl.bind(mod .. " + M", hl.dsp.exec_cmd("hyprshutdown"), { desc = "Power menu" })
 
+-- Lock. Goes through loginctl rather than calling hyprlock directly so logind
+-- marks the session locked; hypridle receives the resulting Lock signal and
+-- runs its lock_cmd, whose `pidof` guard stops a second hyprlock stacking on
+-- the first. NOTE this bind therefore depends on hypridle running -- it is
+-- started in conf/autostart.lua. If you ever remove it from there, change
+-- this bind to "hyprlock" or the key goes silently dead.
+hl.bind(mod .. " + L", hl.dsp.exec_cmd("loginctl lock-session"), { desc = "Lock screen" })
+
 --------------------------------------------------------------------------
 -- Window management
 --------------------------------------------------------------------------

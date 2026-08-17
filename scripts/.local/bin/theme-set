@@ -50,6 +50,7 @@ targets() {
     cat <<EOF
 hypr-theme.lua.in        $DOTFILES/hypr/.config/hypr/conf/theme.lua
 hyprpaper.conf.in        $cfg/hypr/hyprpaper.conf
+hyprlock.conf.in         $cfg/hypr/hyprlock.conf
 kitty-theme.conf.in      $OUT/kitty.conf
 rofi-colors.rasi.in      $OUT/rofi.rasi
 waybar-style.css.in      $cfg/waybar/style.css

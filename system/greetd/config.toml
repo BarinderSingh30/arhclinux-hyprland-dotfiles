@@ -1,0 +1,78 @@
+# greetd -- login manager.  Deploy target: /etc/greetd/config.toml
+#
+# This directory is NOT a stow package. These files live outside $HOME and are
+# owned by root, so they get installed explicitly:
+#
+#   sudo install -Dm644 ~/dotfiles/system/greetd/config.toml /etc/greetd/config.toml
+#
+# They are kept here so the system config is version-controlled alongside
+# everything else, and so a rebuild does not depend on remembering this file.
+#
+# Format verified against greetd 0.10.3 greetd(5). The complete key set is:
+#   [terminal]         vt, switch
+#   [general]          source_profile, runfile
+#   [default_session]  command, user
+#   [initial_session]  command, user
+
+[terminal]
+# greetd owns tty1, the same VT sddm was using.
+vt = 1
+
+# ---------------------------------------------------------------------------
+# AUTOLOGIN
+#
+# initial_session runs exactly once per boot, then never again until the next
+# boot. From greetd(5): "The initial session will only be executed during the
+# first run of greetd since boot in order to ensure signing out works properly
+# and to prevent security issues whenever greetd or the greeter exit."
+#
+# So: boot goes straight to the desktop; logging out drops you at the greeter
+# below rather than silently logging you back in.
+#
+# Security note, stated once and then dropped: autologin means physical access
+# to this machine at boot is access to the account. hyprlock protects an
+# already-running session, not a cold boot. This was an explicit choice.
+# ---------------------------------------------------------------------------
+[initial_session]
+command = "/usr/bin/start-hyprland"
+user = "barinder"
+
+# ---------------------------------------------------------------------------
+# GREETER -- what you get after an explicit logout.
+# ---------------------------------------------------------------------------
+[default_session]
+command = "tuigreet --time --remember --remember-session --sessions /usr/share/wayland-sessions --cmd /usr/bin/start-hyprland"
+user = "greeter"
+
+# ---------------------------------------------------------------------------
+# Why /usr/bin/start-hyprland and not uwsm
+#
+# The plan called for `uwsm start hyprland-uwsm.desktop`. Two findings changed
+# that, both checked rather than recalled:
+#
+#  1. The real Exec in /usr/share/wayland-sessions/hyprland-uwsm.desktop is
+#     `uwsm start -e -D Hyprland hyprland.desktop` -- and a `uwsm start -n`
+#     dry run shows it ultimately launches /usr/bin/start-hyprland anyway,
+#     i.e. exactly the binary named above.
+#
+#  2. `uwsm finalize` is MANDATORY inside the compositor under uwsm. Its own
+#     help: "Otherwise, the compositor's unit will terminate due to startup
+#     timeout." Hyprland ships no uwsm awareness (nothing in /usr/share/hypr
+#     mentions it), so that call has to be added by hand to conf/autostart.lua.
+#     That is a hard failure mode -- session killed, not degraded.
+#
+# sddm currently launches plain hyprland.desktop and it works. Switching the
+# greeter and the session model in one step would mean two variables changing
+# at once during the one phase that can lock you out. So this starts the same
+# binary that works today.
+#
+# uwsm buys systemd-managed session services. This config does not use any:
+# waybar, hyprpaper and hypridle are started by hl.on("hyprland.start") in
+# conf/autostart.lua, and mako is D-Bus activated. So there is currently
+# nothing for it to manage.
+#
+# To adopt uwsm later, it is two edits:
+#   1. this file:            command = "uwsm start -e -D Hyprland hyprland.desktop"
+#   2. conf/autostart.lua:   hl.exec_cmd("uwsm finalize")
+# Do it as its own change, with sddm still installed as a fallback.
+# ---------------------------------------------------------------------------
