@@ -8,35 +8,59 @@ Each top-level directory is a **stow package** whose internal structure mirrors 
 
 ```
 hypr/.config/hypr/      → ~/.config/hypr/
-waybar/.config/waybar/  → ~/.config/waybar/
+waybar/.config/waybar/  → ~/.config/waybar/   (config.jsonc only; style.css is generated)
 kitty/.config/kitty/    → ~/.config/kitty/
 rofi/.config/rofi/      → ~/.config/rofi/
-mako/.config/mako/      → ~/.config/mako/
 zsh/.config/zsh/        → ~/.config/zsh/
 scripts/.local/bin/     → ~/.local/bin/
 ```
+
+There is no `mako` package: mako's config has no useful non-color content, so the whole file is
+generated (see below).
 
 ## Usage
 
 ```sh
 cd ~/dotfiles
-stow hypr waybar kitty rofi mako zsh scripts   # link everything
+mkdir -p ~/.config/{waybar,rofi,kitty,mako,theme,gtk-3.0,gtk-4.0} ~/.config/qt6ct/colors
+stow --no-folding -t ~ hypr waybar kitty rofi zsh scripts
 stow -D hypr                                   # unlink one package (rollback)
 stow -R hypr                                   # re-link after adding files
 ```
+
+`--no-folding` and the `mkdir` matter: without a real directory already present, stow symlinks the
+whole directory into this repo, and generated files would then be written *into* the repo.
 
 ## theme-src/ — not a stow package
 
 `theme-src/` is the **source** for the theming system, not something that gets symlinked.
 
 - `palettes/*.env` — the only place colors are defined. One file per theme.
-- `templates/*.in`  — per-app templates with placeholders.
+- `templates/*.in`  — per-app templates. Substitution is literal `@KEY@`, not `$VAR`, because CSS,
+  rasi and shell all use `$` themselves.
 
-`~/.local/bin/theme-set <palette>` renders every template with the chosen palette into
-`~/.config/theme/` and reloads the running apps. Generated output is build product and is **not**
-tracked here.
+```sh
+theme-set              # re-render the active palette (use after editing a template)
+theme-set gruvbox      # switch
+theme-set --list       # show palettes, * marks active
+theme-set --dry-run    # diff what would change, install nothing
+```
 
-Changing the entire desktop theme is one command; no app config is ever edited by hand.
+A template that needs a key its palette doesn't define makes theme-set **fail** rather than write a
+literal `@ACCENT@` into a live config. Palettes are parsed, never sourced, so switching a theme
+cannot execute anything.
+
+### Where the generated files go
+
+| Destination | Why there |
+|---|---|
+| `~/.config/theme/{kitty.conf,rofi.rasi}` | the app supports `include`/`@import`, so its hand-written config pulls colors in and layout stays separate |
+| `~/.config/{waybar/style.css,mako/config,gtk-3.0,gtk-4.0,qt6ct}` | no include mechanism (GTK, qt6ct, mako) or a symlink-fragile one (waybar's GTK CSS needs an absolute `file://`). Whole file generated; the template is the source of truth |
+| `hypr/.config/hypr/conf/theme.lua` — **in this repo** | a bare clone + stow must boot a working compositor before theme-set has ever run. A broken `hyprland.lua` means no desktop |
+| `~/.config/hypr/hyprpaper.conf` | hyprpaper doesn't expand `~`, so the absolute path is substituted in |
+| `~/.config/theme/wallpaper.jpg` | the palette's `WALLPAPER` image, downscaled to 1920x1080 — hyprpaper decodes to an uncompressed surface, so a 4K source would cost ~32 MB of RAM per output |
+
+Everything except `conf/theme.lua` is build product and is not tracked here.
 
 ## System notes
 

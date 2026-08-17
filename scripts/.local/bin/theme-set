@@ -1,0 +1,285 @@
+#!/usr/bin/env bash
+#
+# theme-set -- render every desktop config from one palette file.
+#
+#   theme-set              # re-render the currently active palette
+#   theme-set gruvbox      # switch to theme-src/palettes/gruvbox.env
+#   theme-set --list       # show available palettes
+#   theme-set --dry-run    # render to a temp dir and diff, install nothing
+#
+# The point: colors are written in exactly one place per palette. Every app
+# config is a template rendered from it, so swapping the whole desktop theme
+# is one command and can never leave two apps disagreeing about the accent.
+#
+# Substitution is literal @KEY@ -> value. Not $VAR: CSS, rasi and shell all
+# use '$' for their own purposes, and '@KEY@' collides with nothing in any of
+# the formats involved.
+
+set -euo pipefail
+
+DOTFILES="${DOTFILES:-$HOME/dotfiles}"
+SRC="$DOTFILES/theme-src"
+PALETTES="$SRC/palettes"
+TEMPLATES="$SRC/templates"
+OUT="${XDG_CONFIG_HOME:-$HOME/.config}/theme"
+STATE="$OUT/active"
+
+die()  { printf '\033[31mtheme-set:\033[0m %s\n' "$*" >&2; exit 1; }
+info() { printf '\033[34m::\033[0m %s\n' "$*"; }
+warn() { printf '\033[33m::\033[0m %s\n' "$*" >&2; }
+
+# ---------------------------------------------------------------------------
+# Destination map: TEMPLATE -> absolute destination path.
+#
+# Two kinds of destination, and the difference is not arbitrary:
+#
+#   ~/.config/theme/*   the app supports include/@import, so it keeps a
+#                       hand-written config that pulls colors in. Layout and
+#                       palette stay in separate files.
+#
+#   direct paths        the app has no include mechanism (GTK, qt6ct, mako)
+#                       or resolving a relative import through a stow symlink
+#                       is fragile (waybar's GTK CSS). The whole file is
+#                       generated; the template in git is the source of truth.
+#
+# conf/theme.lua is written back into the REPO, not ~/.config, so a bare
+# clone + stow yields a working compositor before theme-set has ever run.
+# ---------------------------------------------------------------------------
+targets() {
+    local cfg="${XDG_CONFIG_HOME:-$HOME/.config}"
+    cat <<EOF
+hypr-theme.lua.in        $DOTFILES/hypr/.config/hypr/conf/theme.lua
+hyprpaper.conf.in        $cfg/hypr/hyprpaper.conf
+kitty-theme.conf.in      $OUT/kitty.conf
+rofi-colors.rasi.in      $OUT/rofi.rasi
+waybar-style.css.in      $cfg/waybar/style.css
+mako-config.in           $cfg/mako/config
+gtk3-settings.ini.in     $cfg/gtk-3.0/settings.ini
+gtk4-settings.ini.in     $cfg/gtk-4.0/settings.ini
+qt6ct.conf.in            $cfg/qt6ct/qt6ct.conf
+qt6ct-colors.conf.in     $cfg/qt6ct/colors/theme.conf
+EOF
+}
+
+# ---------------------------------------------------------------------------
+usage() {
+    sed -n '3,17p' "$0" | sed 's/^# \?//'
+    exit 0
+}
+
+list_palettes() {
+    local active="" f
+    [[ -f $STATE ]] && active=$(<"$STATE")
+    for f in "$PALETTES"/*.env; do
+        [[ -e $f ]] || die "no palettes in $PALETTES"
+        local n=${f##*/}; n=${n%.env}
+        if [[ $n == "$active" ]]; then printf '  * %s\n' "$n"
+        else                           printf '    %s\n' "$n"; fi
+    done
+    exit 0
+}
+
+DRY=0
+PALETTE=""
+while (($#)); do
+    case $1 in
+        -h|--help)  usage ;;
+        -l|--list)  list_palettes ;;
+        -n|--dry-run) DRY=1 ;;
+        -*)         die "unknown option: $1" ;;
+        *)          PALETTE=$1 ;;
+    esac
+    shift
+done
+
+# No argument: re-render whatever is already active. Makes theme-set the
+# single way to apply template edits too, not just palette switches.
+if [[ -z $PALETTE ]]; then
+    [[ -f $STATE ]] || die "no active palette; run: theme-set --list"
+    PALETTE=$(<"$STATE")
+fi
+
+PALETTE_FILE="$PALETTES/$PALETTE.env"
+[[ -f $PALETTE_FILE ]] || die "no such palette: $PALETTE (try --list)"
+
+# ---------------------------------------------------------------------------
+# Load the palette.
+#
+# Parsed, never sourced: the file must contain only KEY=value lines and
+# comments. A palette is data, and sourcing it would turn "switch theme" into
+# arbitrary code execution.
+#
+# A value may carry a trailing ` # comment`; it is stripped below. Values are
+# unquoted and may contain spaces ("Noto Sans"), so only whitespace-preceded
+# '#' counts as a comment -- and no palette value legitimately contains one.
+# ---------------------------------------------------------------------------
+declare -A P=()
+lineno=0
+while IFS= read -r line || [[ -n $line ]]; do
+    ((++lineno))
+
+    # Strip the comment FIRST, then validate. Prose is allowed to contain
+    # ';' and '$'; values are not.
+    line=${line%%[[:space:]]#*}
+    [[ $line =~ ^[[:space:]]*(#.*)?$ ]] && continue
+
+    if [[ ! $line =~ ^[A-Z][A-Z0-9_]*=[^\;\&\|\`\$\(\)]*$ ]]; then
+        printf '%s:%d: %s\n' "$PALETTE.env" "$lineno" "$line" >&2
+        die "not a plain KEY=value line (shown above)"
+    fi
+
+    k=${line%%=*}
+    v=${line#*=}
+    v=${v%"${v##*[![:space:]]}"}     # right-trim
+    P[$k]=$v
+done < "$PALETTE_FILE"
+
+((${#P[@]})) || die "$PALETTE.env defined no keys"
+
+# Injected keys. Not colors, but templates need absolute paths: qt6ct's
+# color_scheme_path and hyprpaper's preload are read by programs that do not
+# expand '~'. These are reserved names -- a palette cannot override them.
+P[HOME]=$HOME
+P[CONFIG]="${XDG_CONFIG_HOME:-$HOME/.config}"
+P[THEME_DIR]=$OUT
+
+# ---------------------------------------------------------------------------
+# Render.
+# ---------------------------------------------------------------------------
+# One sed program built once from the palette, applied to every template.
+SED_PROG=$(for k in "${!P[@]}"; do
+    # '|' as delimiter: hex values and theme names never contain it.
+    printf 's|@%s@|%s|g\n' "$k" "${P[$k]//|/\\|}"
+done)
+
+STAGE=$(mktemp -d) ; trap 'rm -rf "$STAGE"' EXIT
+
+declare -a RENDERED=()
+while read -r tpl dest; do
+    [[ -n $tpl ]] || continue
+    if [[ ! -f $TEMPLATES/$tpl ]]; then
+        warn "skipping $tpl -- no such template"
+        continue
+    fi
+    sed "$SED_PROG" "$TEMPLATES/$tpl" > "$STAGE/$tpl"
+
+    # An unsubstituted marker means the palette is missing a key the template
+    # needs. Shipping that would put a literal '@ACCENT@' into a live config,
+    # so fail loudly instead.
+    if grep -qE '@[A-Z][A-Z0-9_]*@' "$STAGE/$tpl"; then
+        grep -onE '@[A-Z][A-Z0-9_]*@' "$STAGE/$tpl" | sort -u -t: -k2 >&2
+        die "$tpl needs keys $PALETTE.env does not define (shown above)"
+    fi
+    RENDERED+=("$tpl|$dest")
+done < <(targets)
+
+((${#RENDERED[@]})) || die "no templates rendered -- is $TEMPLATES populated?"
+
+if ((DRY)); then
+    info "dry run -- nothing installed"
+    for entry in "${RENDERED[@]}"; do
+        tpl=${entry%%|*}; dest=${entry#*|}
+        if [[ ! -f $dest ]]; then
+            printf '  +  %s (new)\n' "$dest"
+            sed 's/^/     /' "$STAGE/$tpl"
+        elif diff -q "$STAGE/$tpl" "$dest" >/dev/null; then
+            printf '  =  %s\n' "$dest"
+        else
+            printf '  ~  %s\n' "$dest"
+            diff -u --label "$dest (current)" --label "$dest (new)" \
+                 "$dest" "$STAGE/$tpl" | sed 's/^/     /' || true
+        fi
+    done
+    exit 0
+fi
+
+mkdir -p "$OUT"
+for entry in "${RENDERED[@]}"; do
+    tpl=${entry%%|*}; dest=${entry#*|}
+    mkdir -p "${dest%/*}"
+    install -m 0644 "$STAGE/$tpl" "$dest"
+done
+info "rendered ${#RENDERED[@]} files for palette '$PALETTE'"
+
+# ---------------------------------------------------------------------------
+# Wallpaper.
+#
+# The palette names a source image; we downscale it once to panel resolution
+# and hyprpaper loads the result. hyprpaper decodes to an uncompressed
+# surface, so feeding it a 3800x2149 source costs ~32 MB of RAM per output
+# for detail no panel here can show. 1920x1080 covers the larger screen.
+#
+# Re-encoded only when the source is newer than the output, so repeated
+# theme-set runs are cheap.
+# ---------------------------------------------------------------------------
+WALL="$OUT/wallpaper.jpg"
+SRC_WALL=${P[WALLPAPER]/#\~/$HOME}
+
+if [[ -z ${P[WALLPAPER]:-} ]]; then
+    warn "wallpaper: $PALETTE.env sets no WALLPAPER"
+elif [[ ! -f $SRC_WALL ]]; then
+    warn "wallpaper: $SRC_WALL does not exist -- Hyprland's background_color shows through"
+elif ! command -v ffmpeg >/dev/null; then
+    warn "wallpaper: ffmpeg not found, cannot downscale"
+elif [[ -f $WALL && $WALL -nt $SRC_WALL ]]; then
+    info "wallpaper: $WALL is current"
+else
+    # scale=...:force_original_aspect_ratio=increase then crop = "cover":
+    # fill the frame, keep the aspect, trim the overflow. Never letterboxed,
+    # never squashed.
+    if ffmpeg -hide_banner -loglevel error -y -i "$SRC_WALL" \
+        -vf "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080" \
+        -q:v 3 "$WALL" 2>/dev/null
+    then
+        info "wallpaper: downscaled $(basename "$SRC_WALL") -> $WALL ($(du -h "$WALL" | cut -f1))"
+    else
+        warn "wallpaper: ffmpeg failed on $SRC_WALL"
+    fi
+fi
+
+printf '%s\n' "$PALETTE" > "$STATE"
+
+# ---------------------------------------------------------------------------
+# Reload live processes.
+#
+# Each guarded on the process actually running, so theme-set works fine from
+# a TTY or before the session is up.
+# ---------------------------------------------------------------------------
+reload() {
+    local name=$1; shift
+    pgrep -x "$name" >/dev/null 2>&1 || return 0
+    if "$@" >/dev/null 2>&1; then info "reloaded $name"
+    else warn "$name is running but did not reload"; fi
+}
+
+# Capital H: the binary is /usr/bin/Hyprland and pgrep -x is case-sensitive.
+reload Hyprland hyprctl reload
+reload waybar    pkill -SIGUSR2 -x waybar     # on-sigusr2 defaults to "reload"
+reload mako      makoctl reload
+
+# hyprpaper 0.8 moved IPC onto a Wayland protocol and `hyprctl hyprpaper
+# reload` no longer answers, so restart it instead. It is a 479 KB process
+# with no state worth preserving, and the path in hyprpaper.conf is fixed --
+# only the image behind it changed.
+if pgrep -x hyprpaper >/dev/null 2>&1; then
+    pkill -x hyprpaper && sleep 0.3
+    # `hyprctl dispatch` takes Lua in 0.56, not the old "exec foo" string.
+    hyprctl dispatch 'hl.dsp.exec_cmd("hyprpaper")' >/dev/null 2>&1 \
+        && info "restarted hyprpaper"
+fi
+
+# kitty reloads its own config on SIGUSR1, per instance.
+pgrep -x kitty >/dev/null 2>&1 && { pkill -SIGUSR1 -x kitty || true; }
+
+# GTK apps read these from the settings portal / gsettings, not the ini file,
+# so the ini alone does not move a running app.
+if command -v gsettings >/dev/null; then
+    gsettings set org.gnome.desktop.interface color-scheme "${P[COLOR_SCHEME]}"   2>/dev/null || true
+    gsettings set org.gnome.desktop.interface gtk-theme    "${P[GTK_THEME]}"      2>/dev/null || true
+    gsettings set org.gnome.desktop.interface icon-theme   "${P[ICON_THEME]}"     2>/dev/null || true
+    gsettings set org.gnome.desktop.interface cursor-theme "${P[CURSOR_THEME]}"   2>/dev/null || true
+    gsettings set org.gnome.desktop.interface cursor-size  "${P[CURSOR_SIZE]}"    2>/dev/null || true
+    gsettings set org.gnome.desktop.interface font-name    "${P[FONT_UI]} ${P[FONT_SIZE]}" 2>/dev/null || true
+fi
+
+info "active palette: $PALETTE"

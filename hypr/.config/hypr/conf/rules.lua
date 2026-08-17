@@ -34,6 +34,17 @@ hl.window_rule({
     float = true,
 })
 
+-- Waybar click targets. Both open a TUI in a throwaway kitty window
+-- (`kitty --class <name>`), so they want to float centered rather than
+-- resize the tiled layout underneath them.
+hl.window_rule({
+    name   = "float-tui-popups",
+    match  = { class = "^(nmtui|btop)$" },
+    float  = true,
+    center = true,
+    size   = "960 640",
+})
+
 -- Picture-in-picture: float, pin above everything, park bottom-right.
 hl.window_rule({
     name  = "pip",

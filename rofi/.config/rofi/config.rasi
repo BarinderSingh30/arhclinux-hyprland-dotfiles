@@ -1,0 +1,137 @@
+/* rofi 2.0 -- behaviour + layout. Colors come from the generated import.
+ *
+ * rofi 2.0 has native Wayland support merged upstream; the lbonn/rofi-wayland
+ * fork is historical and is NOT what this config targets.
+ *
+ * File resolution order for @import is documented in `man 5 rofi-theme`:
+ * an absolute path with ~ expansion is tried first, which is what we use.
+ */
+
+configuration {
+    modes:                  [ drun, run, window ];
+    font:                   "JetBrainsMono Nerd Font 11";
+
+    show-icons:             true;
+    icon-theme:             "Papirus-Dark";
+    display-drun:           "apps";
+    display-run:            "run";
+    display-window:         "win";
+    drun-display-format:    "{name}";
+
+    /* Type-ahead matches anywhere in the name, not just the prefix. */
+    matching:               "fuzzy";
+    sort:                   true;
+    sorting-method:         "fzf";
+
+    /* Frequently-used entries float up over time. */
+    drun-use-desktop-cache: true;
+
+    terminal:               "kitty";
+    kb-cancel:              "Escape,MouseSecondary";
+}
+
+/* Palette. Everything below is written in terms of var(...) defined here, so
+ * a `theme-set` run recolors rofi without touching one line of geometry. */
+@import "~/.config/theme/rofi.rasi"
+
+/* ------------------------------------------------------------------------
+ * Layout -- sharp corners, no shadow, no blur. Matches the compositor.
+ * ---------------------------------------------------------------------- */
+
+window {
+    location:         center;
+    anchor:           center;
+    width:            34em;
+    padding:          0;
+    border:           2px;
+    border-color:     var(accent);
+    border-radius:    0;
+    background-color: var(bg);
+    transparency:     "real";
+    children:         [ mainbox ];
+}
+
+mainbox {
+    padding:          0;
+    spacing:          0;
+    background-color: transparent;
+    children:         [ inputbar, listview ];
+}
+
+inputbar {
+    padding:          10px 12px;
+    spacing:          8px;
+    background-color: var(bg-alt);
+    text-color:       var(fg);
+    children:         [ prompt, entry ];
+}
+
+prompt {
+    text-color:       var(accent);
+    background-color: transparent;
+    vertical-align:   0.5;
+}
+
+entry {
+    placeholder:        "search";
+    placeholder-color:  var(muted);
+    text-color:         var(fg);
+    background-color:   transparent;
+    cursor:             text;
+    vertical-align:     0.5;
+}
+
+listview {
+    lines:            9;
+    columns:          1;
+    fixed-height:     false;   /* shrink to fit when there are few matches */
+    scrollbar:        false;   /* 9 visible lines; a scrollbar is noise */
+    padding:          6px;
+    spacing:          0;
+    background-color: transparent;
+    cycle:            false;
+}
+
+element {
+    padding:          7px 10px;
+    spacing:          10px;
+    border-radius:    0;
+    cursor:           pointer;
+    background-color: transparent;
+    children:         [ element-icon, element-text ];
+}
+
+element-icon {
+    size:             1.1em;
+    cursor:           inherit;
+    background-color: transparent;
+    vertical-align:   0.5;
+}
+
+element-text {
+    highlight:        var(match-highlight);
+    cursor:           inherit;
+    background-color: transparent;
+    vertical-align:   0.5;
+}
+
+element normal.normal   { text-color: var(fg);      background-color: transparent; }
+element alternate.normal{ text-color: var(fg);      background-color: transparent; }
+element selected.normal { text-color: var(bg);      background-color: var(accent); }
+
+element normal.active   { text-color: var(accent-alt); }
+element selected.active { text-color: var(bg); background-color: var(accent-alt); }
+
+element normal.urgent   { text-color: var(urgent); }
+element selected.urgent { text-color: var(bg); background-color: var(urgent); }
+
+/* Shown when a mode has no matches. */
+message {
+    padding:          8px 12px;
+    background-color: var(bg-alt);
+}
+
+textbox {
+    text-color:       var(muted);
+    background-color: transparent;
+}
