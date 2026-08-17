@@ -11,9 +11,21 @@ hypr/.config/hypr/      → ~/.config/hypr/
 waybar/.config/waybar/  → ~/.config/waybar/   (config.jsonc only; style.css is generated)
 kitty/.config/kitty/    → ~/.config/kitty/
 rofi/.config/rofi/      → ~/.config/rofi/
-zsh/.config/zsh/        → ~/.config/zsh/
+zsh/.zshenv             → ~/.zshenv           (bootstrap; see below)
+zsh/.config/zsh/        → ~/.config/zsh/      (.zshrc + conf/*.zsh)
 scripts/.local/bin/     → ~/.local/bin/
 ```
+
+`zsh/.zshenv` is the one file that has to sit directly in `$HOME`. zsh reads its startup files
+from `$ZDOTDIR`, falling back to `$HOME` when that is unset — so the variable must be set somewhere
+zsh looks *before* it knows about it. The only two candidates are `/etc/zsh/zshenv` (root-owned, and
+not shipped on this install) and `~/.zshenv`. That file sets `ZDOTDIR`, and everything else lives
+under `~/.config/zsh`.
+
+`~/.config/zsh/.zshrc` is a loader only; the content is in `conf/*.zsh`, sourced in numeric order,
+the same shape as `hyprland.lua`. The order matters — `90-plugins.zsh` is numbered 90 because
+zsh-syntax-highlighting wraps every ZLE widget that exists when it loads, so anything sourced after
+it silently loses highlighting.
 
 There is no `mako` package: mako's config has no useful non-color content, so the whole file is
 generated (see below).
@@ -29,7 +41,7 @@ sudo install -Dm644 ~/dotfiles/system/greetd/config.toml /etc/greetd/config.toml
 
 ```sh
 cd ~/dotfiles
-mkdir -p ~/.config/{waybar,rofi,kitty,mako,theme,gtk-3.0,gtk-4.0} ~/.config/qt6ct/colors
+mkdir -p ~/.config/{waybar,rofi,kitty,mako,theme,gtk-3.0,gtk-4.0,bat} ~/.config/qt6ct/colors
 stow --no-folding -t ~ hypr waybar kitty rofi zsh scripts
 stow -D hypr                                   # unlink one package (rollback)
 stow -R hypr                                   # re-link after adding files
@@ -67,6 +79,9 @@ cannot execute anything.
 | `~/.config/hypr/hyprpaper.conf` | hyprpaper doesn't expand `~`, so the absolute path is substituted in |
 | `~/.config/hypr/hyprlock.conf` | no include mechanism, and the lock screen should follow the palette |
 | `~/.config/theme/wallpaper.jpg` | the palette's `WALLPAPER` image, downscaled to 1920x1080 — hyprpaper decodes to an uncompressed surface, so a 4K source would cost ~32 MB of RAM per output |
+| `~/.config/theme/fzf.conf` | fzf's own `FZF_DEFAULT_OPTS_FILE` mechanism is an include, so colors stay separate from behaviour. `conf/40-tools.zsh` exports the path |
+| `~/.config/starship.toml` | starship has no include directive, so the whole prompt config is generated. Validate edits with `starship print-config` |
+| `~/.config/bat/config` | no include mechanism. Note bat's themes are `.tmTheme` XML, so the palette names a **built-in** theme via `BAT_THEME` rather than generating colors |
 
 Everything except `conf/theme.lua` is build product and is not tracked here.
 
