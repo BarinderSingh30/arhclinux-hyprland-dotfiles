@@ -8,8 +8,18 @@ local t = require("conf.theme")
 
 hl.config({
     general = {
-        gaps_in     = 4,
-        gaps_out    = 8,
+        -- gaps_in  = between adjacent tiled windows
+        -- gaps_out = between a window and the screen edge (and the bar)
+        --
+        -- Both accept either a single number or a CSS-style list, and
+        -- `hyprctl getoption general:gaps_in -j` reports them expanded to four
+        -- sides ("2 2 2 2") -- handy for checking a change actually landed.
+        --
+        -- Halved from 4/8. Tighten further by dropping these toward 0; gaps_in
+        -- at 0 makes adjacent windows share a single 2px border line, which
+        -- with rounding = 0 still reads as a clean seam rather than a mistake.
+        gaps_in     = 2,
+        gaps_out    = 4,
         border_size = 2,
 
         col = {
