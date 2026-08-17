@@ -1,0 +1,40 @@
+-- conf/misc.lua -- compositor behaviour that isn't input, looks, or rules
+--
+-- Note: `vfr` is NOT set here. It moved to `debug.vfr` in this version and is
+-- already on by default -- setting it as `misc.vfr` is a config error.
+
+local t = require("conf.theme")
+
+hl.config({
+    misc = {
+        -- hyprpaper owns the wallpaper; no built-in logo or splash.
+        force_default_wallpaper  = 0,
+        disable_hyprland_logo    = true,
+        disable_splash_rendering = true,
+
+        -- Matches the theme, so empty workspaces and the moment before the
+        -- wallpaper loads don't flash a default color.
+        background_color = t.rgb(t.bg),
+
+        -- Keep focus predictable when windows request activation.
+        focus_on_activate          = true,
+        mouse_move_focuses_monitor = true,
+
+        -- Terminal swallowing: launching a GUI app from kitty hides the
+        -- terminal until the app exits, instead of leaving a dead pane tiled.
+        enable_swallow = true,
+        swallow_regex  = "^(kitty)$",
+
+        -- Warn when an app stops responding rather than leaving a frozen window.
+        enable_anr_dialog = true,
+    },
+
+    general = {
+        -- Snap floating windows to edges and to each other.
+        snap = {
+            enabled     = true,
+            window_gap  = 10,
+            monitor_gap = 10,
+        },
+    },
+})
