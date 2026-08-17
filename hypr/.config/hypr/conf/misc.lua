@@ -27,6 +27,12 @@ hl.config({
 
         -- Warn when an app stops responding rather than leaving a frozen window.
         enable_anr_dialog = true,
+
+        -- Suppress Hyprland's fractional-scaling overlay, which fires because
+        -- eDP-1 runs at 1.25x. Compositor notice about our own config change;
+        -- it repeats and says nothing actionable. Does not affect app
+        -- notifications, which go through the D-Bus daemon (dunst -> mako).
+        disable_scale_notification = true,
     },
 
     general = {
