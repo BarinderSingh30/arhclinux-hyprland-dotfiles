@@ -20,11 +20,30 @@ configuration {
 
     /* Type-ahead matches anywhere in the name, not just the prefix. */
     matching:               "fuzzy";
+
+    /* Frequently-used entries float up over time. This is what does it: the
+     * launch counts live in ~/.cache/rofi3.druncache and sort applies them. */
     sort:                   true;
     sorting-method:         "fzf";
 
-    /* Frequently-used entries float up over time. */
-    drun-use-desktop-cache: true;
+    /* drun-use-desktop-cache is deliberately NOT set.
+     *
+     * It caches the scan of every .desktop file, and it does not invalidate
+     * itself -- rofi has a SEPARATE drun-reload-desktop-cache option for that,
+     * so with only the first one set the cache is written once and then trusted
+     * forever. Newly installed applications never appear, and a reboot does not
+     * help, because nothing ever marks the cache stale.
+     *
+     * That is exactly what happened here: the cache was built 2026-08-17 16:31
+     * and spotify.desktop and zen.desktop, installed afterwards, were missing
+     * from the launcher entirely.
+     *
+     * Turning the cache off means rofi rescans on every launch. That is the
+     * right trade at this scale -- there are 43 .desktop files on this system,
+     * and the scan is not measurable next to rofi drawing its window. It is
+     * also the only way to get the "shows up the moment it is installed"
+     * behaviour that is wanted here.
+     */
 
     terminal:               "kitty";
     kb-cancel:              "Escape,MouseSecondary";
