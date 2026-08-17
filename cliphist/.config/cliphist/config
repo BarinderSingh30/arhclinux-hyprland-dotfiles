@@ -1,0 +1,30 @@
+# cliphist -- clipboard history daemon settings.
+#
+# Format is `key value`, one per line, with NO leading dash. This is not
+# documented anywhere; it was determined by experiment. `-db-path ./x` and
+# `db-path=./x` both parse as nothing and are silently ignored, which is the
+# worst possible failure mode -- so if a setting here seems to do nothing,
+# suspect the syntax before suspecting cliphist.
+#
+# These are the same names shown by `cliphist -h`, minus the dash. Reading
+# this file replaces command-line flags, so every cliphist invocation --
+# the watchers in conf/autostart.lua and clip-menu alike -- picks these up
+# without repeating them.
+
+# 750 (the default) is far more history than is ever scrolled through, and
+# every entry is a row rofi has to render. 200 still covers days of work.
+max-items 200
+
+# How much of each entry is shown in the picker. The default 100 truncates
+# mid-path on anything long; clip-menu opens a 52em-wide window, so there is
+# room for more.
+preview-width 180
+
+# db-path is deliberately left at its default, ~/.cache/cliphist/db.
+#
+# It is arguably state rather than cache, but Go does not expand `~` in a
+# config value, so overriding it would mean hardcoding /home/barinder into a
+# file that is meant to be portable. Living under ~/.cache also means a cache
+# cleaner erases the clipboard history, which for clipboard history is a
+# feature. The file itself is mode 644, but ~/.cache and ~/.cache/cliphist are
+# both 700, so no other local user can reach it.

@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+#
+# keybind-help -- searchable keybind cheatsheet, read from the live compositor.
+#
+#   keybind-help           # show in rofi
+#   keybind-help --print   # plain text on stdout
+#
+# The list is NOT a hand-maintained document. It comes from `hyprctl binds -j`,
+# which is Hyprland reporting the binds it currently holds. That means the
+# cheatsheet cannot go stale: edit conf/binds.lua, reload, and this updates
+# itself. A written-out list would have drifted within a week.
+#
+# The flip side: a bind only appears here if it was given a `desc`. That is
+# deliberate -- mouse drag/resize and scroll-to-switch-workspace have no useful
+# one-line description and would just be noise. Add `{ desc = "..." }` in
+# conf/binds.lua and it shows up here.
+
+set -euo pipefail
+
+die() { printf '\033[31mkeybind-help:\033[0m %s\n' "$*" >&2; exit 1; }
+
+command -v hyprctl >/dev/null || die "hyprctl not found -- not a Hyprland session?"
+command -v jq      >/dev/null || die "jq not found (pacman -S jq)"
+
+# ---------------------------------------------------------------------------
+# modmask is a bitmask, not a name. The bit values are the standard X11/xkb
+# modifier masks, confirmed against this config's own binds: SUPER+Q reports
+# 64, SUPER+SHIFT+left reports 65.
+#
+#   1 SHIFT   2 CAPS   4 CTRL   8 ALT   16 MOD2   32 MOD3   64 SUPER   128 MOD5
+#
+# Only the four that get used are decoded. CAPS/MOD2/MOD3/MOD5 are not bound
+# to anything here and printing them would be misleading.
+# ---------------------------------------------------------------------------
+read -r -d '' JQ <<'EOF' || true
+def bit($m; $b): (($m / $b) | floor) % 2 == 1;
+
+def combo($m):
+  [ (if bit($m;64) then "SUPER" else empty end),
+    (if bit($m;4)  then "CTRL"  else empty end),
+    (if bit($m;8)  then "ALT"   else empty end),
+    (if bit($m;1)  then "SHIFT" else empty end) ]
+  | join(" + ");
+
+# Raw key names are what xkb calls them, which is not what is printed on the
+# keycap. Map the ones that differ; strip the XF86 vendor prefix off the rest.
+def prettykey($k):
+  { "left":"←", "right":"→", "up":"↑", "down":"↓",
+    "PRINT":"Print", "slash":"/", "bracketleft":"[", "bracketright":"]",
+    "comma":",", "period":".", "semicolon":";", "apostrophe":"'",
+    "minus":"-", "equal":"=", "grave":"`", "space":"Space", "Return":"Enter",
+    "Escape":"Esc", "Tab":"Tab" }[$k] // ($k | sub("^XF86"; ""));
+
+[ .[]
+  | select(.has_description and (.description | length > 0))
+  | select(.mouse | not)
+  | { mm: .modmask, mods: combo(.modmask), key: prettykey(.key), desc: .description }
+]
+
+# Ten near-identical workspace binds are ten lines of noise. Collapse any run
+# that shares a modifier combo and whose descriptions differ only by a trailing
+# number -- "Workspace 1".."Workspace 10" becomes one row listing the keys.
+# Generic on purpose: no bind name is hardcoded here.
+| group_by([.mods, (.desc | sub("[ 0-9]+$"; ""))])
+| map(
+    if length == 1 then .[0]
+    else { mm:   .[0].mm,
+           mods: .[0].mods,
+           key:  (map(.key) | join(" ")),
+           desc: (.[0].desc | sub("[ 0-9]+$"; "")) }
+    end
+  )
+# Sort by modifier weight so the sheet reads in tiers: bare keys, then SUPER,
+# then SUPER+SHIFT. Within a tier, alphabetical by what the bind does.
+| sort_by([.mm, .desc])
+| map({ combo: (if .mods == "" then .key else .mods + " + " + .key end),
+        desc:  .desc })
+
+# Pad column 1 so descriptions line up. Done in jq rather than awk on purpose:
+# jq's `length` counts CODEPOINTS, so the arrow glyphs above measure as one
+# column each. awk's length() only does that in a UTF-8 locale, and a script
+# launched from a keybind does not get to assume its locale.
+#
+# The width is CAPPED at 24. Without a cap, the one collapsed workspace row
+# ("SUPER + SHIFT + 1 2 3 4 5 6 7 8 9 0") sets the column for all 25 rows and
+# strands every description a third of the way across the window. Rows wider
+# than the cap simply overhang and take the minimum two-space gap.
+#
+# The gap is +2 rather than +0 for a second reason: jq's `"x" * 0` returns
+# null, not "", and null would swallow the whole concatenation.
+| ([ (map(.combo | length) | max), 24 ] | min) as $w
+| .[]
+| .combo + (" " * ([$w - (.combo | length), 0] | max) + "  ") + .desc
+EOF
+
+rows() {
+    hyprctl binds -j 2>/dev/null | jq -r "$JQ" \
+        || die "could not read binds from hyprctl"
+}
+
+case "${1:-}" in
+    --print|-p) rows; exit 0 ;;
+    --help|-h)  sed -n '3,6p' "$0" | sed 's/^# \?//'; exit 0 ;;
+    "")         ;;
+    *)          die "unknown option: $1" ;;
+esac
+
+# -no-custom: there is nothing to type-and-create here, only to look at.
+# -l is larger than the config's 9 lines because a cheatsheet is for reading,
+# not for searching down to one hit. Selecting a row does nothing on purpose --
+# running a bind by picking it from a list would be a surprising way to fire
+# "Close window".
+rows | rofi -dmenu \
+    -p "keys" \
+    -no-show-icons \
+    -no-custom \
+    -l 22 \
+    -theme-str 'window { width: 44em; } listview { lines: 22; }' \
+    >/dev/null || true

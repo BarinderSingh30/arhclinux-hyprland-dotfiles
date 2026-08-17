@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+#
+# clip-menu -- clipboard history, picked from rofi.
+#
+#   clip-menu            # pick an entry; it becomes the current clipboard
+#   clip-menu --delete   # pick an entry and remove it from history
+#   clip-menu --wipe     # erase the whole history (asks first)
+#
+# How this works, because it is two separate pieces:
+#
+#   1. `wl-paste --watch cliphist store` runs in the background for the whole
+#      session (started in conf/autostart.lua). Every time ANYTHING copies,
+#      wl-paste wakes up and cliphist appends it to a small database. Nothing
+#      is recorded unless that watcher is running.
+#   2. This script reads that database back and hands the choice to wl-copy.
+#
+# So the history is populated by the watcher, not by this script -- if entries
+# stop appearing, check the watcher is alive, not this file.
+
+set -euo pipefail
+
+die() { printf '\033[31mclip-menu:\033[0m %s\n' "$*" >&2; exit 1; }
+
+command -v cliphist >/dev/null || die "cliphist not found (pacman -S cliphist)"
+command -v wl-copy  >/dev/null || die "wl-copy not found (pacman -S wl-clipboard)"
+command -v rofi     >/dev/null || die "rofi not found"
+
+# Entries are one-per-line and already newline-escaped by cliphist, but they
+# are arbitrary user text, so icon lookup is pointless and slow here.
+# -no-custom: typing a string that matches nothing must not "select" it --
+# there would be nothing to decode and the clipboard would end up holding the
+# search query instead of a history entry.
+pick() {
+    rofi -dmenu \
+        -p "$1" \
+        -no-show-icons \
+        -no-custom \
+        -l 12 \
+        -theme-str 'window { width: 52em; } listview { lines: 12; }'
+}
+
+case "${1:-}" in
+    --wipe|-w)
+        # Destructive and unrecoverable, and it would be launched from a
+        # keybind with no terminal to print a warning into, so the
+        # confirmation is a rofi prompt.
+        confirm=$(printf 'no\nyes, erase all clipboard history\n' | pick "wipe?") || exit 0
+        [[ $confirm == yes* ]] || exit 0
+        cliphist wipe
+        command -v notify-send >/dev/null && notify-send -a clip-menu "Clipboard history wiped"
+        exit 0
+        ;;
+    --delete|-d) mode=delete ;;
+    --help|-h)   sed -n '3,7p' "$0" | sed 's/^# \?//'; exit 0 ;;
+    "")          mode=copy ;;
+    *)           die "unknown option: $1" ;;
+esac
+
+# `|| exit 0` covers Escape: rofi exits non-zero and prints nothing. Without
+# it, `set -e` would be the only thing standing between an empty selection and
+# the pipeline below.
+#
+# This is the part worth being careful about. `cliphist list | rofi | cliphist
+# decode | wl-copy` is the recipe everyone copies, and on Escape it feeds an
+# empty string all the way through to wl-copy -- which does not error, it
+# cheerfully sets your clipboard to nothing. Pressing Escape in a clipboard
+# manager should not destroy the clipboard.
+history=$(cliphist list)
+
+# An empty history makes rofi open and close again in the same frame, which
+# from a keybind is indistinguishable from the key being broken. Most likely
+# on a fresh boot, or if the watchers in conf/autostart.lua never started --
+# so say which.
+if [[ -z $history ]]; then
+    if pgrep -x wl-paste >/dev/null; then
+        msg="Clipboard history is empty -- nothing copied yet."
+    else
+        msg="Clipboard watchers are not running. Check conf/autostart.lua."
+    fi
+    command -v notify-send >/dev/null && notify-send -a clip-menu "$msg" || printf '%s\n' "$msg"
+    exit 0
+fi
+
+selection=$(printf '%s\n' "$history" | pick "clipboard") || exit 0
+[[ -n $selection ]] || exit 0
+
+case $mode in
+    copy)
+        # decode takes the whole selected line and reads the id off the front,
+        # which is why the raw line is passed through rather than being cut.
+        # Binary entries (images) round-trip through this unchanged.
+        printf '%s' "$selection" | cliphist decode | wl-copy
+        ;;
+    delete)
+        printf '%s' "$selection" | cliphist delete
+        ;;
+esac
