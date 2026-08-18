@@ -26,6 +26,7 @@ Where to make a given change:
 | gaps, borders, blur, animations | `hypr/.config/hypr/conf/{decorations,animations}.lua` | `hyprctl reload` |
 | monitors, workspaces, input | `hypr/.config/hypr/conf/{monitors,workspaces,input}.lua` | `hyprctl reload` |
 | what starts at login | `hypr/.config/hypr/conf/autostart.lua` | log out / in |
+| which Bluetooth devices auto-connect | `gsettings set org.blueman.plugins.autoconnect services` — dconf, **not** in this repo | nothing |
 | which modules are in the bar | `waybar/.config/waybar/config.jsonc` | restart waybar |
 | how the bar looks | `theme-src/templates/waybar-style.css.in` | `theme-set` |
 | notification behaviour, widgets | `swaync/.config/swaync/config.json` | `swaync-client -R` |
@@ -532,3 +533,49 @@ silently ignored, so if a setting appears to do nothing, suspect the syntax firs
   ```
   `0x4a` = 0 dB, clean and loud · `0x38` barely audible · `0x33` inaudible on these speakers ·
   `0x1e` nothing. Anything below roughly `0x40` will be reported as "no sound from the speakers".
+- **Paired + trusted does not mean auto-connect.** `bluetoothd` never *initiates* a connection to a
+  paired BR/EDR device; it only accepts inbound ones. `Trusted: yes` merely means "do not ask me to
+  authorise it when it knocks", and `[Policy] AutoEnable` (default `true`) only powers the adapter
+  on at boot. So earbuds that are asleep in their case at login stay disconnected until something
+  in the session calls `Device.Connect()`. Nothing did, before 2026-08-18.
+
+  The thing that does it is **blueman's AutoConnect applet plugin**, which walks
+  `gsettings get org.blueman.plugins.autoconnect services` on startup, on every adapter
+  power-on, and **every 60 s** thereafter. The retry loop is the point: it means the buds connect
+  whenever they leave the case, not only if they happen to be awake at the moment of login. Each
+  entry is an `(address, uuid)` pair, and the all-zero UUID is blueman's "connect every profile"
+  sentinel (`plugins/applet/DBusService.py` maps it to a plain `Device.Connect()`):
+  ```sh
+  gsettings get org.blueman.plugins.autoconnect services
+  # [('9C:DE:F0:CA:81:A0', '00000000-0000-0000-0000-000000000000')]
+  ```
+  In the GUI this is the checkbox under **Auto-connect** when you right-click the device in
+  `blueman-manager`. Verified 2026-08-18 by disconnecting the buds twice: with the entry present
+  they came back in 39 s and 42 s, and with the list emptied they stayed down for the full 90 s.
+
+  **This setting is dconf, not a file in this repo** — it lives in `~/.config/dconf/user`, a binary
+  blob, and `stow` cannot carry it. Re-run the `gsettings set` above after a reinstall, or the buds
+  silently go back to never connecting.
+- **The Bluetooth tray icon comes from `blueman-applet`, and nothing else publishes one.** Waybar's
+  `tray` module is only a StatusNotifierHost — it displays items, it never invents them. Symptom
+  before the applet was autostarted: the icon appeared *only* after opening `blueman-manager`,
+  which looks like the manager owning the icon but is really D-Bus activation — the manager talks
+  to `org.blueman.Applet` (`blueman/main/DBusProxies.py`), and
+  `/usr/share/dbus-1/services/org.blueman.Applet.service` starts the applet on demand. Close the
+  manager, and the applet (and icon) linger only until the next login.
+
+  It is launched from `conf/autostart.lua`, after waybar so the tray host exists first. It cannot
+  be a systemd user unit: blueman ships `/usr/lib/systemd/user/blueman-applet.service`, but that
+  unit has **no `[Install]` section**, so `systemctl --user enable` has nothing to hook it to —
+  a different failure from the `graphical-session.target` trap that keeps cliphist out of systemd,
+  with the same conclusion.
+
+  Check it is actually publishing an item, rather than squinting at the bar:
+  ```sh
+  busctl --user get-property org.kde.StatusNotifierWatcher /StatusNotifierWatcher \
+      org.kde.StatusNotifierWatcher RegisteredStatusNotifierItems
+  # as 1 ":1.46/org/blueman/sni"
+  ```
+  Remember the tray is **behind the `󰅂` chevron** on eDP-1 (`group/tray-expander`, click-to-reveal),
+  so a correctly running applet still shows nothing until the drawer is opened. ~64 MB RSS, the
+  largest single entry in `autostart.lua`.

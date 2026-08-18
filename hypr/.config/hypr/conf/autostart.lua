@@ -23,6 +23,29 @@ hl.on("hyprland.start", function()
     -- this single process drives both screens.
     hl.exec_cmd("waybar")
 
+    -- Bluetooth applet. Two jobs, both of which were missing before:
+    --
+    --   1. The tray icon. Nothing else on this system publishes a Bluetooth
+    --      StatusNotifierItem, so waybar's "tray" module had nothing to show.
+    --      The icon only appeared after opening blueman-manager because the
+    --      manager talks to org.blueman.Applet over D-Bus (main/DBusProxies.py),
+    --      which D-Bus-activates the applet as a side effect.
+    --
+    --   2. Auto-connect. bluetoothd never initiates a connection to a paired
+    --      BR/EDR device on its own -- it only accepts inbound ones -- so
+    --      "Trusted: yes" alone reconnects nothing at boot. blueman's
+    --      AutoConnect plugin calls Device.Connect() on startup, whenever the
+    --      adapter powers on, and every 60s after that, for each device in
+    --      `gsettings get org.blueman.plugins.autoconnect services`. That
+    --      retry loop is why the earbuds connect whenever they leave the case,
+    --      not only if they happen to be awake at boot.
+    --
+    -- blueman ships /usr/lib/systemd/user/blueman-applet.service, but it has
+    -- no [Install] section, so `systemctl --user enable` has nothing to hook
+    -- it to. Launched here instead, after waybar so the tray host exists first.
+    -- Costs ~50 MB RSS -- the largest single item in this file.
+    hl.exec_cmd("blueman-applet")
+
     -- Idle daemon: dim, lock, blank. Also the D-Bus listener that turns
     -- `loginctl lock-session` (SUPER+L, and lock-before-suspend) into an
     -- actual hyprlock. Reads ~/.config/hypr/hypridle.conf.
