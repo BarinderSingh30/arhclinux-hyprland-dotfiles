@@ -34,7 +34,7 @@
         "modules-left":   ["hyprland/workspaces", "hyprland/submap"],
         "modules-center": ["clock"],
         "modules-right":  ["group/tray-expander", "wireplumber", "network",
-                           "memory", "cpu", "custom/battery", "custom/power"],
+                           "memory", "cpu", "custom/notification", "custom/battery", "custom/power"],
 
         "hyprland/workspaces": {
             "format": "{id}",
@@ -165,6 +165,31 @@
             "on-click": "kitty --class btop -e btop"
         },
 
+        // swaync's own official waybar recipe: exec-if guards against this
+        // erroring out if swaync were ever uninstalled, {0} in the format is
+        // the unread count, and the format-icons cover every combination of
+        // DND and inhibited state, not just plain has-notifications/none.
+        "custom/notification": {
+            "tooltip": true,
+            "format": "{0} {icon}",
+            "format-icons": {
+                "notification": "󱅫",
+                "none": "󰂜",
+                "dnd-notification": "󰂠",
+                "dnd-none": "󰪓",
+                "inhibited-notification": "󰂛",
+                "inhibited-none": "󰪑",
+                "dnd-inhibited-notification": "󰂛",
+                "dnd-inhibited-none": "󰪑"
+            },
+            "return-type": "json",
+            "exec-if": "which swaync-client",
+            "exec": "swaync-client -swb",
+            "on-click": "swaync-client -t -sw",
+            "on-click-right": "swaync-client -d -sw",
+            "escape": true
+        },
+
         // A custom module, not waybar's native battery module: the native
         // module's tooltip-format can't reach data from another daemon, and
         // the whole point here is showing the current power-profiles-daemon
@@ -217,7 +242,7 @@
         // second copy of a system-wide profile toggle invites clicking the
         // one you are not looking at. The power button IS duplicated, because
         // needing it while the pointer is on this screen is normal.
-        "modules-right":  ["wireplumber", "network", "memory", "custom/power"],
+        "modules-right":  ["wireplumber", "network", "memory", "custom/notification", "custom/power"],
 
         "hyprland/workspaces": {
             "format": "{id}",
@@ -278,9 +303,30 @@
         },
 
         // Repeated verbatim from the laptop bar. Module definitions are
-        // resolved per bar object, so naming "custom/power" in modules-right
-        // above is not enough on its own -- without this block the module
+        // resolved per bar object, so naming a module in modules-right above
+        // is not enough on its own -- without this block the module
         // silently does not appear.
+        "custom/notification": {
+            "tooltip": true,
+            "format": "{0} {icon}",
+            "format-icons": {
+                "notification": "󱅫",
+                "none": "󰂜",
+                "dnd-notification": "󰂠",
+                "dnd-none": "󰪓",
+                "inhibited-notification": "󰂛",
+                "inhibited-none": "󰪑",
+                "dnd-inhibited-notification": "󰂛",
+                "dnd-inhibited-none": "󰪑"
+            },
+            "return-type": "json",
+            "exec-if": "which swaync-client",
+            "exec": "swaync-client -swb",
+            "on-click": "swaync-client -t -sw",
+            "on-click-right": "swaync-client -d -sw",
+            "escape": true
+        },
+
         "custom/power": {
             "format": "󰐥",
             "tooltip": true,

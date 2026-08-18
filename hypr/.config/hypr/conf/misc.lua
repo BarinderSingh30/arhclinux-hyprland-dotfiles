@@ -33,7 +33,8 @@ hl.config({
         -- Suppress Hyprland's fractional-scaling overlay, which fires because
         -- eDP-1 runs at 1.25x. Compositor notice about our own config change;
         -- it repeats and says nothing actionable. Does not affect app
-        -- notifications, which go through the D-Bus daemon (dunst -> mako).
+        -- notifications, which go through the D-Bus daemon (dunst -> mako ->
+        -- swaync).
         disable_scale_notification = true,
     },
 

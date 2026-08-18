@@ -37,10 +37,14 @@ warn() { printf '\033[33m::\033[0m %s\n' "$*" >&2; }
 #                       hand-written config that pulls colors in. Layout and
 #                       palette stay in separate files.
 #
-#   direct paths        the app has no include mechanism (GTK, qt6ct, mako)
-#                       or resolving a relative import through a stow symlink
+#   direct paths        the app has no include mechanism (GTK, qt6ct) or
+#                       resolving a relative import through a stow symlink
 #                       is fragile (waybar's GTK CSS). The whole file is
 #                       generated; the template in git is the source of truth.
+#                       swaync is here too: it replaces its *entire* user
+#                       style.css rather than layering on top of the system
+#                       default, so the template has to be a complete
+#                       stylesheet, not just a colors patch.
 #
 # conf/theme.lua is written back into the REPO, not ~/.config, so a bare
 # clone + stow yields a working compositor before theme-set has ever run.
@@ -54,11 +58,12 @@ hyprlock.conf.in         $cfg/hypr/hyprlock.conf
 kitty-theme.conf.in      $OUT/kitty.conf
 rofi-colors.rasi.in      $OUT/rofi.rasi
 waybar-style.css.in      $cfg/waybar/style.css
-mako-config.in           $cfg/mako/config
+swaync-style.css.in      $cfg/swaync/style.css
 gtk3-settings.ini.in     $cfg/gtk-3.0/settings.ini
 gtk4-settings.ini.in     $cfg/gtk-4.0/settings.ini
 qt6ct.conf.in            $cfg/qt6ct/qt6ct.conf
 qt6ct-colors.conf.in     $cfg/qt6ct/colors/theme.conf
+kdeglobals.in            $cfg/kdeglobals
 qt-apps.qss.in           $OUT/qt-apps.qss
 starship.toml.in         $cfg/starship.toml
 fzf-opts.conf.in         $OUT/fzf.conf
@@ -260,7 +265,10 @@ reload() {
 # Capital H: the binary is /usr/bin/Hyprland and pgrep -x is case-sensitive.
 reload Hyprland hyprctl reload
 reload waybar    pkill -SIGUSR2 -x waybar     # on-sigusr2 defaults to "reload"
-reload mako      makoctl reload
+
+# Config and CSS are two separate reloads in swaync; -rs re-reads the file
+# from ~/.config/swaync/style.css, it doesn't take the new content inline.
+reload swaync    swaync-client -rs
 
 # hyprpaper 0.8 moved IPC onto a Wayland protocol and `hyprctl hyprpaper
 # reload` no longer answers, so restart it instead. It is a 479 KB process

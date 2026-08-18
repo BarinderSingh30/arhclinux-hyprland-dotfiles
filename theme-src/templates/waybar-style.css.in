@@ -177,6 +177,7 @@ tooltip label {
 #network,
 #memory,
 #cpu,
+#custom-notification,
 #custom-battery,
 #custom-power {
     padding: 0 10px;
@@ -203,6 +204,7 @@ tooltip label {
 #network                { color: @cyan;    }
 #memory                 { color: @teal;    }
 #cpu                    { color: @orange;  }
+#custom-notification    { color: @purple;  }
 
 /* The power button sits quiet until you reach for it. Colouring it red
    permanently would put a standing alarm in the corner of a bar that is
@@ -231,6 +233,7 @@ tooltip label {
 #network:hover,
 #memory:hover,
 #cpu:hover,
+#custom-notification:hover,
 #custom-battery:hover {
     background-color: @bg-hl;
 }

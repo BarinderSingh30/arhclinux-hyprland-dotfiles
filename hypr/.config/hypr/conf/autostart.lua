@@ -4,10 +4,10 @@
 -- binds for brightnessctl, playerctl and hyprshutdown that were never
 -- installed, so those keys were silently dead. Not repeating that mistake.
 --
--- Deliberately NOT here: mako. It ships a D-Bus service file
--- (/usr/share/dbus-1/services/fr.emersion.mako.service), so it is activated
--- on the first notification and costs nothing until then. Starting it
--- eagerly would just be a resident process waiting for work.
+-- Deliberately NOT here: swaync. It ships D-Bus service files
+-- (/usr/share/dbus-1/services/org.erikreider.swaync{,.cc}.service), so it is
+-- activated on the first notification and costs nothing until then. Starting
+-- it eagerly would just be a resident process waiting for work.
 --
 
 hl.on("hyprland.start", function()

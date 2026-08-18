@@ -12,33 +12,24 @@
 #   [terminal]         vt, switch
 #   [general]          source_profile, runfile
 #   [default_session]  command, user
-#   [initial_session]  command, user
 
 [terminal]
 # greetd owns tty1, the same VT sddm was using.
 vt = 1
 
 # ---------------------------------------------------------------------------
-# AUTOLOGIN
+# AUTOLOGIN -- deliberately not used.
 #
-# initial_session runs exactly once per boot, then never again until the next
-# boot. From greetd(5): "The initial session will only be executed during the
-# first run of greetd since boot in order to ensure signing out works properly
-# and to prevent security issues whenever greetd or the greeter exit."
-#
-# So: boot goes straight to the desktop; logging out drops you at the greeter
-# below rather than silently logging you back in.
-#
-# Security note, stated once and then dropped: autologin means physical access
-# to this machine at boot is access to the account. hyprlock protects an
-# already-running session, not a cold boot. This was an explicit choice.
+# greetd(5) supports an [initial_session] table that runs a session once per
+# boot, before the greeter ever shows -- i.e. autologin. That was tried and
+# then reverted: it means physical access to this machine at boot is access
+# to the account, and hyprlock only protects an already-running session, not
+# a cold boot. Every boot now goes through the greeter below and asks for a
+# password.
 # ---------------------------------------------------------------------------
-[initial_session]
-command = "/usr/bin/start-hyprland"
-user = "barinder"
 
 # ---------------------------------------------------------------------------
-# GREETER -- what you get after an explicit logout.
+# GREETER -- shown on every boot and after every logout.
 # ---------------------------------------------------------------------------
 [default_session]
 command = "tuigreet --time --remember --remember-session --sessions /usr/share/wayland-sessions --cmd /usr/bin/start-hyprland"
