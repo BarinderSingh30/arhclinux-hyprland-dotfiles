@@ -1,0 +1,33 @@
+[Desktop Entry]
+# Local override of /usr/share/applications/org.kde.dolphin.desktop.
+#
+# Purpose: run Dolphin with its STOCK appearance, opted out of the rice.
+# Everything else Qt6 (pavucontrol-qt, wifi-qt) still goes through qt6ct.
+#
+# How: conf/env.lua exports QT_QPA_PLATFORMTHEME=qt6ct session-wide, which is
+# what pulls in ~/.config/theme/qt-apps.qss (and the qt6ct palette) for every
+# Qt6 app that starts. `env -u` drops that one variable for this process only,
+# so Dolphin falls back to Qt's built-in default style -- no dark sidebar, no
+# custom stylesheet, no Papirus-Dark icon override.
+#
+# A same-named file here shadows the system one entirely (XDG_DATA_HOME wins
+# over /usr/share), so this file must carry every key that matters, not just
+# the changed Exec. Localised Name/Comment strings are dropped deliberately;
+# the English ones are what this system uses.
+#
+# To undo: delete this file, then run
+#   update-desktop-database ~/.local/share/applications
+Name=Dolphin
+GenericName=File Manager
+Comment=Manage your files
+Exec=env -u QT_QPA_PLATFORMTHEME dolphin %u
+Icon=org.kde.dolphin
+Type=Application
+X-DocPath=dolphin/index.html
+Categories=Qt;KDE;System;FileTools;FileManager;
+MimeType=inode/directory;
+InitialPreference=10
+Keywords=files;file management;file browsing;samba;network shares;Explorer;Finder;
+X-DBUS-ServiceName=org.kde.dolphin
+X-KDE-Shortcuts=Meta+E
+StartupWMClass=dolphin

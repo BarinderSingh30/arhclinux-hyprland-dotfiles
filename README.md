@@ -33,6 +33,7 @@ Where to make a given change:
 | shell behaviour, aliases, keys | `zsh/.config/zsh/conf/*.zsh` | `exec zsh` |
 | the launcher | `rofi/.config/rofi/config.rasi` | nothing |
 | terminal behaviour (not color) | `kitty/.config/kitty/kitty.conf` | new kitty window |
+| whether Dolphin is themed at all | `dolphin/` (see Layout) | reopen Dolphin |
 
 **Read "System notes" at the bottom before debugging anything that "should work".** Every entry
 there is a trap that already cost a debugging session — Hyprland spawning commands without your
@@ -58,7 +59,19 @@ zsh/.zshenv             → ~/.zshenv           (bootstrap; see below)
 zsh/.config/zsh/        → ~/.config/zsh/      (.zshrc + conf/*.zsh)
 cliphist/.config/cliphist/ → ~/.config/cliphist/
 scripts/.local/bin/     → ~/.local/bin/
+dolphin/.local/share/applications/       → ~/.local/share/applications/
+dolphin/.config/systemd/user/            → ~/.config/systemd/user/
 ```
+
+`dolphin/` opts Dolphin **out** of the theming, which is the opposite of every other package
+here. It ships no colors — just two overrides that drop `QT_QPA_PLATFORMTHEME=qt6ct` for
+Dolphin alone, so it renders in its stock light theme while pavucontrol-qt and wifi-qt stay
+themed. Two files are needed because Dolphin starts two ways: the `.desktop` override covers
+rofi and "Open With", and the systemd drop-in covers D-Bus activation of
+`org.freedesktop.FileManager1` ("Show in folder" from Firefox), which inherits the
+`systemctl --user` activation environment instead. Each file's header explains how to undo it.
+Removing the package restores the themed Dolphin: `stow -D dolphin`, then
+`systemctl --user daemon-reload` and `update-desktop-database ~/.local/share/applications`.
 
 `zsh/.zshenv` is the one file that has to sit directly in `$HOME`. zsh reads its startup files
 from `$ZDOTDIR`, falling back to `$HOME` when that is unset — so the variable must be set somewhere
@@ -83,7 +96,10 @@ sudo install -Dm644 ~/dotfiles/system/greetd/config.toml /etc/greetd/config.toml
 ```sh
 cd ~/dotfiles
 mkdir -p ~/.config/{waybar,swaync,rofi,kitty,theme,gtk-3.0,gtk-4.0,bat,cliphist} ~/.config/qt6ct/colors
-stow --no-folding -t ~ hypr waybar swaync kitty rofi zsh cliphist scripts
+mkdir -p ~/.local/share/applications ~/.config/systemd/user/plasma-dolphin.service.d
+stow --no-folding -t ~ hypr waybar swaync kitty rofi zsh cliphist scripts dolphin
+systemctl --user daemon-reload                 # pick up dolphin/'s systemd drop-in
+update-desktop-database ~/.local/share/applications
 stow -D hypr                                   # unlink one package (rollback)
 stow -R hypr                                   # re-link after adding files
 ```
@@ -266,3 +282,22 @@ silently ignored, so if a setting appears to do nothing, suspect the syntax firs
   notification name" and hit systemd's start-limit, because a leftover `mako` process (started
   before the removal) was still sitting on `org.freedesktop.Notifications`. `pgrep -x <old-daemon>`
   and kill it by PID before trusting a replacement daemon's dbus-activation to "just work".
+- **Dolphin cannot be themed by anything in this repo — don't try again.** Measured 2026-08-18,
+  by experiment rather than by reading tutorials, after a long session spent chasing it:
+  - it ignores qt6ct's `custom_palette` / `color_scheme_path`;
+  - it ignores `~/.config/kdeglobals` completely. A scheme with `[Colors:View]
+    BackgroundNormal=255,0,0` produced no red anywhere, so a KDE color scheme is not the fix —
+    and note KDE writes those values as decimal `R,G,B`, not hex, which is its own trap;
+  - `qt-apps.qss` reaches its toolbar and sidebar but never the file-list pane, because
+    `KItemListView` is a `QGraphicsWidget` painting from a `KColorScheme`, not a styleable
+    `QWidget`. No QSS rule gets in, including `#qt_scrollarea_viewport`.
+
+  The control test that settles it: pavucontrol-qt renders perfectly with the same config, so
+  the theming system is fine and Dolphin is the outlier. Real theming would need the `breeze`
+  widget style package (only `breeze-icons` is installed). The `dolphin/` stow package takes the
+  other route and opts it out entirely.
+- **A long-lived Qt app keeps the stylesheet it launched with.** qt6ct reads
+  `Interface/stylesheets` once at app startup, so a window opened before a `theme-set` run keeps
+  the old look and can appear "half themed" next to freshly started apps. Restart the app before
+  concluding a config change did nothing — misreading this sent the Dolphin session above down
+  several dead ends.
