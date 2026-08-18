@@ -34,6 +34,7 @@ Where to make a given change:
 | shell behaviour, aliases, keys | `zsh/.config/zsh/conf/*.zsh` | `exec zsh` |
 | the launcher | `rofi/.config/rofi/config.rasi` | nothing |
 | terminal behaviour (not color) | `kitty/.config/kitty/kitty.conf` | new kitty window |
+| how transparent an app's window is | not the palette — see **Transparency** below | varies |
 | how Dolphin is themed | `dolphin/` + `fileManager` in `conf/binds.lua` | reopen Dolphin |
 
 **Read "System notes" at the bottom before debugging anything that "should work".** Every entry
@@ -112,7 +113,7 @@ cd ~/dotfiles
 mkdir -p ~/.config/{waybar,swaync,rofi,kitty,theme,gtk-3.0,gtk-4.0,bat,cliphist} ~/.config/qt6ct/colors
 mkdir -p ~/.local/share/applications ~/.config/systemd/user/plasma-dolphin.service.d
 mkdir -p ~/.config/wireplumber/wireplumber.conf.d
-stow --no-folding -t ~ hypr waybar swaync kitty rofi zsh cliphist scripts dolphin spotify audio
+stow --no-folding -t ~ hypr waybar swaync kitty rofi zsh cliphist scripts dolphin spotify zen audio
 systemctl --user daemon-reload                 # pick up dolphin/'s systemd drop-in
 update-desktop-database ~/.local/share/applications
 stow -D hypr                                   # unlink one package (rollback)
@@ -185,6 +186,59 @@ print(load_config(os.path.expanduser("~/.config/kitty/kitty.conf")).background_o
 
 No blur anywhere: not kitty's `background_blur`, not `decoration.blur`. Blur is a per-frame GPU cost
 and this machine has an Iris Plus G1; transparency without it is free.
+
+#### Apps whose transparency is *not* palette-driven
+
+Two apps can't take a palette key, because their transparency isn't a color at all. Both are
+documented here so the next "make X transparent" doesn't start from scratch.
+
+| App | Mechanism | Where | Value |
+|---|---|---|---|
+| Spotify | Hyprland window rule, `opacity` | `hypr/.config/hypr/conf/rules.lua` | `0.88` |
+| Zen | Zen's own pref `zen.widget.linux.transparency` | `zen/.config/zen/<profile>/user.js` | `true` |
+
+**The distinction that matters, and it is not obvious.** Hyprland's `opacity` is *whole-surface*
+alpha: the compositor blends the finished window texture as one image, so it cannot tell an app's
+chrome from its content. That is fine for Spotify. It is wrong for a browser — at `0.92` on Zen it
+made *the video being watched* translucent, which is what sent this down the second path.
+
+kitty is the counter-example worth holding onto: `background_opacity` is an **app-level** setting,
+so only the terminal background goes translucent and the glyphs stay fully opaque. Matching kitty's
+*number* on another app does not reproduce kitty's *effect* unless that app also does its own
+compositing.
+
+Zen does. `zen.widget.linux.transparency` gates a CSS block in Zen's own
+`zen-styles/zen-theme.css` that sets `background: transparent` on `#main-window` and blanks
+`--zen-themed-toolbar-bg-transparent` — chrome only. Web content stays opaque because content
+transparency is a *separate* pref, `browser.tabs.allow_transparent_browser`, left at its default
+`false`. So: **no Hyprland window rule for class `zen`**, on purpose. If one gets added, videos go
+see-through again.
+
+It is a widget-level pref, so it needs a full Zen restart, not a reload.
+
+Deliberately **not** enabled: `zen.theme.acrylic-elements`, which adds `backdrop-filter` blur to the
+sidebar and urlbar. Zen's own source comment says it "makes zen REALLY slow" — it forces layering
+with `translate: 0` on the content browser. Same reasoning as "no blur anywhere" above. It sits
+commented out in `user.js`.
+
+`user.js` rather than about:config: Zen rewrites `prefs.js` on exit, so a pref set only through the
+UI can be lost. `user.js` is reapplied at every startup.
+
+**`zen/` must be stowed with `--no-folding`** — more so than any other package here. The stow target
+is a live browser profile directory. If stow folded it into a symlink, Zen would write its entire
+profile — cookies, history, `places.sqlite`, caches — *into this repo*. The profile directory
+already exists in practice, so folding won't trigger, but never stow this one bare.
+
+The profile directory name (`2jw4pton.Default (release)`) is generated at first run and is specific
+to this install — `installs.ini` names the active one. On a fresh machine it will differ, so the
+path inside `zen/` must be renamed to match before stowing, or the `user.js` lands in a profile Zen
+never opens and the pref silently does nothing.
+
+Reading Zen's shipped defaults means unpacking `/opt/zen-browser-bin/{browser/,}omni.ja`. Note
+**`unzip` is not installed on this machine**, and `bsdtar`/Python's `zipfile` both fail on these
+archives ("Bad magic number for central directory") — Mozilla's `.ja` files use an optimized layout.
+Scanning for `PK\x03\x04` local file headers and inflating each entry with `zlib.decompress(raw, -15)`
+works, and is how the pref table above was found rather than guessed.
 
 ## scripts/
 
