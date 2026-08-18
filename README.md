@@ -469,3 +469,9 @@ silently ignored, so if a setting appears to do nothing, suspect the syntax firs
   pactl list sinks short          # the target sink must read RUNNING
   pactl list sink-inputs          # and a stream must exist on it
   ```
+- **An app that was running while sinks came and went may never reattach.** Firefox-based browsers
+  (Zen) keep a dead audio pipe when the sink they were bound to disappears — restarting
+  WirePlumber, switching profiles, or removing the HDMI sinks all do it. The tell is that
+  `pactl list sink-inputs` reports **no streams at all** while the app still shows as a PipeWire
+  client in `wpctl status`. PipeWire is fine in that state and a test tone will play normally;
+  only the app is stuck. Restart the app, not the machine.
