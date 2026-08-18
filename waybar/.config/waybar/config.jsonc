@@ -100,6 +100,13 @@
             "format-ethernet": "󰈀",
             "format-linked": "󰈀 no IP",
             "format-disconnected": "󰖪",
+            // Missing before: rfkill-off (nmcli radio wifi off, e.g. from
+            // wifi-qt's own toggle) hits this state specifically, not
+            // format-disconnected, and with nothing set for it waybar
+            // rendered the module as empty text -- the icon just vanished
+            // instead of showing "off".
+            "format-disabled": "󰤭",
+            "tooltip-format-disabled": "wifi disabled",
             "tooltip-format-wifi": "{essid}  {ipaddr}/{cidr}\n{bandwidthDownBits} / {bandwidthUpBits}",
             "tooltip-format-ethernet": "{ifname}  {ipaddr}/{cidr}",
             "tooltip-format-disconnected": "offline",
@@ -225,6 +232,13 @@
             "format-ethernet": "󰈀",
             "format-linked": "󰈀 no IP",
             "format-disconnected": "󰖪",
+            // Missing before: rfkill-off (nmcli radio wifi off, e.g. from
+            // wifi-qt's own toggle) hits this state specifically, not
+            // format-disconnected, and with nothing set for it waybar
+            // rendered the module as empty text -- the icon just vanished
+            // instead of showing "off".
+            "format-disabled": "󰤭",
+            "tooltip-format-disabled": "wifi disabled",
             "tooltip-format-wifi": "{essid}  {ipaddr}/{cidr}",
             "tooltip-format-disconnected": "offline",
             "on-click": "$HOME/.local/bin/wifi-qt-toggle"
