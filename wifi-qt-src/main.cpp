@@ -203,6 +203,12 @@ public:
 
         list = new QListWidget(central);
         list->setFont(QFont("Noto Sans", 11));
+        // Keeps a real scrollable viewport once the list is shown, rather
+        // than the stretchy layout item collapsing to whatever's left over
+        // after the details panel -- long network lists (more than fit
+        // here) get the vertical scrollbar QListWidget already provides
+        // natively (Qt::ScrollBarAsNeeded is the default).
+        list->setMinimumHeight(180);
         list->hide();
         layout->addWidget(list, /* stretch */ 1);
 
@@ -227,7 +233,14 @@ public:
         refreshButton->hide();
         bar->addWidget(refreshButton);
 
+        // itemClicked is the mouse path; itemActivated additionally covers
+        // keyboard Enter/Return on whichever row arrow-key navigation (or
+        // scrolling) has highlighted, and double-click. Without it, finding
+        // a network by scrolling with the keyboard had no way to act on it.
         connect(list, &QListWidget::itemClicked, this, [this](QListWidgetItem *item) {
+            selectNetwork(item);
+        });
+        connect(list, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
             selectNetwork(item);
         });
 
@@ -433,6 +446,11 @@ private:
         }
         statusBar()->showMessage(QString("Found %1 network%2")
             .arg(nets.size()).arg(nets.size() == 1 ? "" : "s"));
+
+        // So arrow keys/PageUp/PageDown work right away without an extra
+        // click on the list first.
+        if (!nets.isEmpty())
+            list->setFocus();
     }
 
     void toggleRadio() {
