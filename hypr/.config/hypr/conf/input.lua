@@ -13,7 +13,7 @@ hl.config({
 
         touchpad = {
             natural_scroll       = true,
-            disable_while_typing = true,
+            disable_while_typing = false,  -- keep pointer live while keys are held (gaming)
             tap_to_click         = true,
             drag_lock            = true,
             scroll_factor        = 0.6,  -- default is twitchy on this trackpad
