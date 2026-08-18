@@ -59,6 +59,7 @@ gtk3-settings.ini.in     $cfg/gtk-3.0/settings.ini
 gtk4-settings.ini.in     $cfg/gtk-4.0/settings.ini
 qt6ct.conf.in            $cfg/qt6ct/qt6ct.conf
 qt6ct-colors.conf.in     $cfg/qt6ct/colors/theme.conf
+pavucontrol-qt.qss.in    $OUT/pavucontrol-qt.qss
 starship.toml.in         $cfg/starship.toml
 fzf-opts.conf.in         $OUT/fzf.conf
 bat-config.in            $cfg/bat/config

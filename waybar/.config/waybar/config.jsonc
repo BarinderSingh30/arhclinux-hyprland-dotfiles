@@ -80,9 +80,16 @@
             "format-icons": ["󰕿", "󰖀", "󰕾"],
             "scroll-step": 5,
             "max-volume": 100,
-            // wpctl is already what the XF86Audio keys use in conf/binds.lua;
-            // pavucontrol is not installed and is not worth 40 MB of GTK.
-            "on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+            // pavucontrol-qt for the full per-app mixer -- qt6-base/qt6ct
+            // were already installed for the rest of the theming pipeline,
+            // so this was ~1MB. scripts/.local/bin/mixer-toggle opens it, or
+            // closes it if it's already open, so the click behaves like a
+            // toggle instead of stacking a new window each time -- $HOME
+            // because waybar's spawn shell doesn't inherit ~/.local/bin on
+            // PATH. Mute-toggle moved off left-click to make room for that;
+            // scroll (above) still does volume steps as before.
+            "on-click": "$HOME/.local/bin/mixer-toggle",
+            "on-click-middle": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
             "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle",
             "tooltip-format": "{node_name}"
         },
@@ -203,7 +210,8 @@
             "format-icons": ["󰕿", "󰖀", "󰕾"],
             "scroll-step": 5,
             "max-volume": 100,
-            "on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+            "on-click": "$HOME/.local/bin/mixer-toggle",
+            "on-click-middle": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
             "tooltip-format": "{node_name}"
         },
 

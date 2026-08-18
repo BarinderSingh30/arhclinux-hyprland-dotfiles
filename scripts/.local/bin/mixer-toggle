@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+#
+# mixer-toggle -- open pavucontrol-qt, or close it if it's already open.
+#
+# Used as wireplumber's on-click in waybar so the click behaves like a
+# toggle instead of stacking a new window every time (waybar's on-click is
+# just "run this command," it has no concept of "this app is already
+# running" on its own).
+#
+# Closed via SIGTERM to the process rather than hyprctl's closewindow
+# dispatcher: this Hyprland config is Lua (see CLAUDE.md), and
+# `hl.dsp.window.close()` as used in conf/binds.lua only closes the
+# currently FOCUSED window with no documented window-selector argument for
+# targeting a specific class from a script. A plain volume mixer has no
+# state worth a graceful-quit signal anyway.
+
+set -euo pipefail
+
+die() { printf '\033[31mmixer-toggle:\033[0m %s\n' "$*" >&2; exit 1; }
+
+command -v pavucontrol-qt >/dev/null || die "pavucontrol-qt not found"
+
+if pgrep -x pavucontrol-qt >/dev/null; then
+    pkill -x pavucontrol-qt
+else
+    pavucontrol-qt &
+    disown
+fi

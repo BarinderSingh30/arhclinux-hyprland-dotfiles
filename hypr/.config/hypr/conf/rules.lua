@@ -30,8 +30,17 @@ hl.window_rule({
 
 hl.window_rule({
     name  = "float-utility-classes",
-    match = { class = "^(org.kde.polkit-kde-authentication-agent-1|blueman-manager|nm-connection-editor|pavucontrol)$" },
+    match = { class = "^(org.kde.polkit-kde-authentication-agent-1|blueman-manager|nm-connection-editor|pavucontrol|pavucontrol-qt)$" },
     float = true,
+})
+
+-- Plain alpha, no blur -- same call as kitty's TERM_OPACITY and waybar's
+-- BAR_OPACITY (see theme-src/palettes/*.env): this machine's Iris Plus G1
+-- makes blur a real per-frame cost, transparency without it is free.
+hl.window_rule({
+    name    = "mixer-transparency",
+    match   = { class = "^(pavucontrol-qt)$" },
+    opacity = "0.90 0.90",
 })
 
 -- Waybar click target. Opens a TUI in a throwaway kitty window

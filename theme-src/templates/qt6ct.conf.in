@@ -39,3 +39,9 @@ cursor_flash_time=1000
 double_click_interval=400
 wheel_scroll_lines=3
 force_raster_widgets=false
+; Applies to any Qt6 app using qt6ct, not just this one -- see the header
+; comment in pavucontrol-qt.qss.in for why that's fine for now. loadStyleSheets()
+; in qt6ct's platform theme plugin does a literal QFile::exists() on this value,
+; not a search-path lookup, so it must be the absolute path, not a bare filename
+; (verified against upstream qt6ctplatformtheme.cpp, not guessed).
+stylesheets=@THEME_DIR@/pavucontrol-qt.qss
