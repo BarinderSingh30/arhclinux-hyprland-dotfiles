@@ -10,7 +10,14 @@
 local mod = "SUPER"
 
 local terminal    = "kitty"
-local fileManager = "dolphin"
+-- `env -u QT_QPA_PLATFORMTHEME` keeps Dolphin at its stock light theme, the
+-- same opt-out the dolphin/ stow package applies to the other launch routes.
+-- It has to be repeated HERE because a Hyprland bind execs the binary
+-- directly and never reads a .desktop file, so the override in
+-- ~/.local/share/applications does not apply to SUPER+E. Without this, the
+-- keybind is the one route that still starts a themed Dolphin -- which is
+-- exactly how this was missed the first time round.
+local fileManager = "env -u QT_QPA_PLATFORMTHEME dolphin"
 local menu        = "rofi -show drun"
 
 -- Scripts from this repo must be called by ABSOLUTE path.
