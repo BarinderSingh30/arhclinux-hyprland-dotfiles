@@ -172,6 +172,7 @@ tooltip label {
 /* Shared geometry only. Colour is per-module below -- one flat grey for the
    whole row is what made the bar look monotonous. */
 #tray,
+#custom-tray-toggle,
 #wireplumber,
 #network,
 #memory,
@@ -180,6 +181,18 @@ tooltip label {
 #custom-power {
     padding: 0 10px;
     background-color: transparent;
+}
+
+/* The chevron that opens the tray drawer. A UI control, not a data readout,
+   so it follows #custom-power's treatment below rather than joining the
+   coloured module row: quiet until you reach for it. */
+#custom-tray-toggle {
+    color: @fg-dim;
+}
+
+#custom-tray-toggle:hover {
+    color: @accent;
+    background-color: @bg-hl;
 }
 
 /* The row, in order. Colour carries the identity so the icons stay readable

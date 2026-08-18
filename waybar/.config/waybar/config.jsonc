@@ -33,7 +33,7 @@
 
         "modules-left":   ["hyprland/workspaces", "hyprland/submap"],
         "modules-center": ["clock"],
-        "modules-right":  ["tray", "wireplumber", "network",
+        "modules-right":  ["group/tray-expander", "wireplumber", "network",
                            "memory", "cpu", "custom/battery", "custom/power"],
 
         "hyprland/workspaces": {
@@ -66,6 +66,31 @@
                     "today":   "<span color='#7aa2f7'><b><u>{}</u></b></span>"
                 }
             }
+        },
+
+        // The tray sits behind a chevron rather than showing directly:
+        // today it's just blueman's icon, but the next app that wants a
+        // tray icon (Spotify, Discord, Steam, ...) would otherwise crowd the
+        // bar by default. Group drawers are waybar's native mechanism for
+        // this -- there is no floating popup panel in waybar's tray/group
+        // system, only an inline reveal that slides the hidden modules out
+        // sideways next to the group leader, which is what this is.
+        "custom/tray-toggle": {
+            "format": "󰅂",
+            "tooltip": true,
+            "tooltip-format": "Tray"
+        },
+
+        "group/tray-expander": {
+            "orientation": "inherit",
+            "drawer": {
+                "transition-duration": 300,
+                "click-to-reveal": true
+            },
+            "modules": [
+                "custom/tray-toggle", // group leader, never hidden
+                "tray"
+            ]
         },
 
         "tray": {
