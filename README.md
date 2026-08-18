@@ -329,3 +329,58 @@ silently ignored, so if a setting appears to do nothing, suspect the syntax firs
   the old look and can appear "half themed" next to freshly started apps. Restart the app before
   concluding a config change did nothing — misreading this sent the Dolphin session above down
   several dead ends.
+- **The laptop speakers come up muted on a fresh install, and a half-unmute still sounds dead.**
+  Two separate traps stacked here, which cost a long session on 2026-08-18.
+
+  First, `alsa-utils` was never installed, so `/var/lib/alsa/asound.state` did not exist and
+  `alsa-restore.service` — already wired into `sound.target`, nothing to enable — had nothing to
+  replay. The card therefore came up every boot in the kernel default state: `Master` **muted at
+  0%** and `Speaker` **muted**. Nothing in the PipeWire/UCM path ever unmutes them.
+
+  Second, on this Conexant CX11970 `Master` and `Speaker` are two virtual controls over the **same**
+  DAC `0x11` output amp, so their attenuations **compound**. Unmuting both to 70% lands the amp at
+  `0x1e` (~-44 dB) — technically playing, inaudible in practice. It reads as
+  "still broken" and sends you hunting for driver bugs. 90%/90% gives `0x3c` (~-7 dB), which is
+  audible. Verify the real gain at the amp, not the percentage:
+  ```sh
+  awk '/^Node 0x11 /,/^  Connection/' /proc/asound/card0/codec#0 | grep Amp-Out
+  amixer -c0 sset Master 90% unmute && amixer -c0 sset Speaker 90% unmute
+  sudo alsactl store          # persist; alsa-restore replays it at boot
+  ```
+
+  Two things look like the bug and are **not**. `dmesg` reports `speaker_outs=0` with
+  `line_outs=1 (0x17) type:speaker` — the Conexant autoconfig classifies the internal speaker pin
+  as a line-out, which is why the speaker shows up under a PipeWire sink named **"Headphones"** and
+  why no separate Speaker sink exists. Harmless. And `EAPD 0x0` on pin `0x17` only means the amp is
+  powered down because nothing unmuted is playing; it flips to `EAPD 0x2` on its own once audio
+  actually flows.
+
+  **Do not force `options snd-intel-dspcfg dsp_driver=1`.** Forcing the legacy HDA driver instead of
+  SOF was the wrong hypothesis here, and it would cost the digital mic array — SOF is auto-selected
+  precisely because this machine has DMICs (`Digital mics found on Skylake+ platform, using SOF
+  driver`).
+
+  Unrelated but adjacent: with the external monitor connected, WirePlumber picks **HDMI1** as the
+  default sink, so audio silently goes to the monitor. Check `pactl list sink-inputs` for which sink
+  a stream landed on before assuming the speakers are at fault.
+- **A stream can be pinned to a device and then ignore the default sink.** WirePlumber's
+  `node.stream.restore-target` (default **true**) remembers, per application, whichever sink a
+  stream last played on. Move a stream once — `pactl move-sink-input`, or the dropdown in a volume
+  applet — and that app is pinned there forever, silently overriding the default sink. Symptom seen
+  2026-08-18: Bluetooth buds connected, `a2dp-sink` active, correctly selected as default sink, and
+  the browser still played to the laptop speakers with no sound in the buds. Turned off natively,
+  so streams always follow the default sink:
+  ```sh
+  wpctl settings --save node.stream.restore-target false
+  wpctl settings node.stream.restore-target        # -> Value: false (Saved: false)
+  ```
+  `wpctl settings` is the supported interface in WirePlumber 0.5 — no config file needed. The
+  schema for every setting, with defaults, is on disk at `/usr/share/wireplumber/wireplumber.conf`
+  under `wireplumber.settings.schema`. Read it there rather than guessing key names.
+
+  Deliberately left at the default: `bluetooth.autoswitch-to-headset-profile = true`, so the buds'
+  microphone works. The cost is that any app opening a mic drops the buds to HSP/HFP telephone
+  quality until it lets go. Set it to `false` if that trade stops being worth it.
+
+  Diagnose routing with `pactl list sink-inputs` (which sink each stream landed on) before touching
+  anything else — it is the first thing to check whenever "device is connected but silent".
