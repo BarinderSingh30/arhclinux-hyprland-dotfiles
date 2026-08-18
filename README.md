@@ -110,7 +110,8 @@ sudo install -Dm644 ~/dotfiles/system/greetd/config.toml /etc/greetd/config.toml
 cd ~/dotfiles
 mkdir -p ~/.config/{waybar,swaync,rofi,kitty,theme,gtk-3.0,gtk-4.0,bat,cliphist} ~/.config/qt6ct/colors
 mkdir -p ~/.local/share/applications ~/.config/systemd/user/plasma-dolphin.service.d
-stow --no-folding -t ~ hypr waybar swaync kitty rofi zsh cliphist scripts dolphin spotify
+mkdir -p ~/.config/wireplumber/wireplumber.conf.d
+stow --no-folding -t ~ hypr waybar swaync kitty rofi zsh cliphist scripts dolphin spotify audio
 systemctl --user daemon-reload                 # pick up dolphin/'s systemd drop-in
 update-desktop-database ~/.local/share/applications
 stow -D hypr                                   # unlink one package (rollback)
@@ -345,8 +346,25 @@ silently ignored, so if a setting appears to do nothing, suspect the syntax firs
   ```sh
   awk '/^Node 0x11 /,/^  Connection/' /proc/asound/card0/codec#0 | grep Amp-Out
   amixer -c0 sset Master 90% unmute && amixer -c0 sset Speaker 90% unmute
-  sudo alsactl store          # persist; alsa-restore replays it at boot
+  sudo alsactl store          # necessary, but NOT sufficient on its own -- see below
   ```
+
+  Third, and the reason `alsactl store` alone does not hold: `alsaucm -c sof-hda-dsp
+  list _devices/HiFi` shows the UCM profile **does** define a `Speaker` device, but WirePlumber
+  never exposes it as a sink or port (the analog sink carries only an `[Out] Headphones` port) and
+  then runs its **DisableSequence**, setting `Speaker Playback Switch off` at every session start.
+  `alsa-restore` runs far earlier in boot, so its restored state is overwritten seconds later.
+  Reproduce without rebooting — this is the test to use, not a reboot:
+  ```sh
+  systemctl --user restart wireplumber && sleep 8 && amixer -c0 sget Speaker
+  ```
+  The fix is the `audio/` stow package: `speaker-unmute.service`, a user unit ordered
+  `After=wireplumber.service` and `WantedBy=wireplumber.service`, which re-asserts the unmute for a
+  few seconds after WirePlumber settles. It re-runs on every WirePlumber restart, not just at login.
+
+  **Do not "fix" this by disabling UCM** with `api.alsa.use-ucm = false` in a
+  `monitor.alsa.rules` drop-in. Tried 2026-08-18: ACP falls back to a bare `stereo-fallback`
+  profile and **all three HDMI outputs disappear**. Reverted.
 
   Two things look like the bug and are **not**. `dmesg` reports `speaker_outs=0` with
   `line_outs=1 (0x17) type:speaker` — the Conexant autoconfig classifies the internal speaker pin
@@ -384,3 +402,46 @@ silently ignored, so if a setting appears to do nothing, suspect the syntax firs
 
   Diagnose routing with `pactl list sink-inputs` (which sink each stream landed on) before touching
   anything else — it is the first thing to check whenever "device is connected but silent".
+- **Two more Bluetooth traps, both self-inflicted and both silent.** Seen 2026-08-18 with the
+  OnePlus Nord Buds 3r.
+
+  `pactl set-default-sink` writes a **permanent** pin to
+  `~/.local/state/wireplumber/default-nodes` as `default.configured.audio.sink`. While that line
+  exists, WirePlumber will not auto-select a newly connected Bluetooth device — the buds connect,
+  negotiate A2DP, and stay silent because the default never moves. Delete the line (not the file,
+  which also holds the source default) and let auto-selection do its job:
+  ```sh
+  cat ~/.local/state/wireplumber/default-nodes
+  wpctl status | sed -n '/Sinks:/,/Sources:/p'   # '*' marks the current default
+  ```
+
+  Separately, the buds can get **stuck in `headset-head-unit`** (HSP/HFP, 1ch 16 kHz — audibly
+  terrible) with **nothing recording**. Once in that state `pactl set-card-profile ... a2dp-sink`
+  fails with `Failure: No such entity`, because BlueZ has stopped advertising the A2DP endpoint at
+  all — check `pactl list cards` and you will see only `headset-*` and `off` profiles. Reconnecting
+  the device restores the A2DP endpoints (`a2dp-sink` = AAC, priority 133, the one you want):
+  ```sh
+  bluetoothctl disconnect <MAC> && sleep 4 && bluetoothctl connect <MAC>
+  ```
+  `bluetooth.autoswitch-to-headset-profile` is deliberately left at its default `true` so the buds'
+  mic works; this stuck state is the price. Reconnect rather than fighting the profile.
+- **HDMI stole the default sink, and priority could not stop it.** The analog sink's only port is
+  `[Out] Headphones`, which reports **"not available"** whenever the 3.5mm jack is empty — even
+  though the laptop speakers hang off the same PCM and work fine. WirePlumber filters on
+  availability *before* priority when choosing a default, so it skipped the built-in output and
+  fell through to HDMI1, playing to a monitor with no speakers. Measured 2026-08-18: setting the
+  HDMI sinks to `priority.session = 100` against the analog sink's `1000` changed nothing — the
+  default stayed HDMI1. **Do not retry the priority route.** What works is disabling the HDMI sink
+  nodes outright, in `audio/`:
+  ```
+  audio/.config/wireplumber/wireplumber.conf.d/51-hdmi-no-default.conf   # node.disabled = true
+  audio/.config/systemd/user/speaker-unmute.service                      # re-unmutes after UCM
+  ```
+  The cost is that HDMI audio is gone entirely; this display has no speakers, so nothing is lost
+  here. Delete the file and restart wireplumber to get it back.
+
+  The three-way interaction to keep in mind when any of this is touched: streams follow the default
+  sink (`node.stream.restore-target = false`), the default is auto-selected with **no** configured
+  pin in `default-nodes`, and HDMI is disabled so the built-in output is the only wired candidate.
+  Bluetooth still wins automatically when connected, because its sink outranks the analog one.
+  Re-pinning a default with `pactl set-default-sink` breaks that chain — see the Bluetooth note.

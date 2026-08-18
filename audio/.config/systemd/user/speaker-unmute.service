@@ -1,0 +1,22 @@
+[Unit]
+Description=Unmute the internal speaker after WirePlumber's UCM disable sequence
+Documentation=https://github.com/barinder/dotfiles
+# WirePlumber runs the UCM Speaker device's DisableSequence at every session
+# start, which sets 'Speaker Playback Switch off' and silences the laptop
+# speakers. alsa-restore runs far earlier, so its saved state is overwritten.
+After=wireplumber.service
+BindsTo=wireplumber.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# WirePlumber's sequence lands slightly after the unit is considered started,
+# so re-assert a few times rather than racing it once.
+ExecStart=/bin/sh -c 'for i in 1 2 3 4 5 6; do \
+  /usr/bin/amixer -c0 sset Master 91%% unmute >/dev/null 2>&1; \
+  /usr/bin/amixer -c0 sset Speaker 91%% unmute >/dev/null 2>&1; \
+  sleep 1; \
+done'
+
+[Install]
+WantedBy=wireplumber.service
