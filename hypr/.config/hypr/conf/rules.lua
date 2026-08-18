@@ -43,6 +43,22 @@ hl.window_rule({
     opacity = "0.90 0.90",
 })
 
+-- Spotify: same plain-alpha treatment, no blur. Matched on the *lowercase*
+-- class -- `spotify` is the native-Wayland class the client reports once
+-- spotify/.config/spotify-flags.conf sets --ozone-platform=wayland. Under
+-- XWayland it would report `Spotify` and this rule would silently miss.
+--
+-- The two numbers are "active inactive". Opacity here is a whole-surface
+-- compositor effect, so album art and text go translucent along with the
+-- chrome -- which is what sets the floor. 0.88 sits just below kitty's
+-- TERM_OPACITY (0.92); by ~0.80 the wallpaper starts fighting the track list
+-- and album thumbnails go muddy. Adjust in ~0.02 steps, `hyprctl reload`.
+hl.window_rule({
+    name    = "spotify-transparency",
+    match   = { class = "^spotify$" },
+    opacity = "0.88 0.88",
+})
+
 -- Waybar click target. Opens a TUI in a throwaway kitty window
 -- (`kitty --class btop`), so it wants to float centered rather than resize
 -- the tiled layout underneath it. (nmtui used to share this rule; the
