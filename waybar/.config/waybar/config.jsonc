@@ -34,8 +34,7 @@
         "modules-left":   ["hyprland/workspaces", "hyprland/submap"],
         "modules-center": ["clock"],
         "modules-right":  ["tray", "wireplumber", "network",
-                           "memory", "cpu", "power-profiles-daemon",
-                           "battery", "custom/power"],
+                           "memory", "cpu", "custom/battery", "custom/power"],
 
         "hyprland/workspaces": {
             "format": "{id}",
@@ -123,43 +122,23 @@
             "on-click": "kitty --class btop -e btop"
         },
 
-        "battery": {
+        // A custom module, not waybar's native battery module: the native
+        // module's tooltip-format can't reach data from another daemon, and
+        // the whole point here is showing the current power-profiles-daemon
+        // profile in the tooltip (see scripts/.local/bin/battery-status for
+        // why, and for where the icons/warning-critical thresholds that used
+        // to live in this config moved to). Style is in
+        // theme-src/templates/waybar-style.css.in under #custom-battery.
+        //
+        // on-click cycles performance -> balanced -> power-saver. That used
+        // to be its own module/icon with native click-cycling; that icon was
+        // dropped to keep the bar shorter and the click folded into battery
+        // instead, since profile choice is really a power/battery concern.
+        "custom/battery": {
+            "exec": "$HOME/.local/bin/battery-status",
+            "return-type": "json",
             "interval": 30,
-            "states": { "warning": 30, "critical": 15 },
-            "format": "{icon} {capacity}%",
-            "format-charging": "󰂄 {capacity}%",
-            // These two were empty, which HID the module entirely whenever the
-            // machine was on AC -- which is nearly always. That was a
-            // deliberate anti-noise choice and it is now reversed by request:
-            // the indicator should be visible, so the plug icon says "on AC"
-            // and the number still shows the charge.
-            "format-plugged": "󰚥 {capacity}%",
-            "format-full": "󰚥 {capacity}%",
-            "format-icons": ["󰁺", "󰁽", "󰁿", "󰂁", "󰂂"],
-            "tooltip-format": "{capacity}%  {timeTo}"
-        },
-
-        // Cycles performance -> balanced -> power-saver on click, through
-        // power-profiles-daemon (already installed and running; the profiles
-        // it offers on this machine come from the intel_pstate driver).
-        //
-        // Switching needs no password: verified with
-        //   pkcheck --action-id org.freedesktop.login1.power-off --process $$
-        // and by round-tripping `powerprofilesctl set balanced` and back.
-        //
-        // Icons are a speedometer at three speeds, so the profile is legible
-        // without reading the tooltip. All three are present in JetBrains Mono
-        // Nerd Font -- checked against the font charset, not assumed.
-        "power-profiles-daemon": {
-            "format": "{icon}",
-            "tooltip": true,
-            "tooltip-format": "Power profile: {profile}\nDriver: {driver}",
-            "format-icons": {
-                "default":     "󰓅",
-                "performance": "󰓅",
-                "balanced":    "󰾅",
-                "power-saver": "󰾆"
-            }
+            "on-click": "$HOME/.local/bin/power-profile-cycle"
         },
 
         // Opens the rofi power menu. Absolute-ish path via $HOME because

@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+#
+# battery-status -- text/tooltip/class for waybar's custom/battery module,
+# as return-type json on stdout.
+#
+# battery became a custom module (rather than waybar's native battery
+# module) for one reason: the native module's tooltip-format has no
+# placeholder that can pull in data from another daemon, and the point of
+# this script is to put the current power-profiles-daemon profile in the
+# battery tooltip now that the profile has no icon of its own (see
+# power-profile-cycle, which this module's on-click runs). Everything else
+# here -- icons, warning/critical thresholds at 30%/15%, charging colour --
+# reproduces what the native battery module did, so waybar-style.css.in's
+# #custom-battery rules are the old #battery rules with the id renamed.
+#
+# Time-to-empty/full comes from upower's own estimate rather than
+# reimplemented from energy-rate, so it should track what the native
+# module showed without duplicating that math here. In practice this
+# machine is always plugged in (see CLAUDE.md), so the discharging branch
+# rarely if ever fires.
+
+set -euo pipefail
+
+bat=$(upower -e | grep -m1 '/battery_') || true
+if [[ -z $bat ]]; then
+    printf '{"text":"","tooltip":"no battery detected"}\n'
+    exit 0
+fi
+
+info=$(upower -i "$bat")
+field() { printf '%s\n' "$info" | awk -F': *' -v k="$1" '$1 ~ "^ *"k"$" {print $2; exit}'; }
+
+state=$(field state)
+percentage=$(field percentage | tr -d '%')
+time_to_empty=$(field "time to empty")
+time_to_full=$(field "time to full")
+
+icons=(󰁺 󰁽 󰁿 󰂁 󰂂)
+idx=$(( percentage * (${#icons[@]} - 1) / 100 ))
+tier_icon=${icons[$idx]}
+
+classes=()
+timeline=""
+
+case $state in
+    charging)
+        icon="󰂄"
+        classes+=(charging)
+        [[ -n $time_to_full ]] && timeline="$time_to_full to full"
+        ;;
+    discharging)
+        icon="$tier_icon"
+        [[ -n $time_to_empty ]] && timeline="$time_to_empty remaining"
+        ;;
+    *)
+        # fully-charged, pending-charge, not charging while plugged in --
+        # all read as "on AC", same as the native module's
+        # format-plugged/format-full sharing one icon.
+        icon="󰚥"
+        ;;
+esac
+
+if   (( percentage <= 15 )); then classes+=(critical)
+elif (( percentage <= 30 )); then classes+=(warning)
+fi
+
+profile=$(powerprofilesctl get 2>/dev/null || echo unknown)
+
+text="$icon ${percentage}%"
+tooltip="${percentage}%"
+[[ -n $timeline ]] && tooltip+="  $timeline"
+tooltip+=$'\n'"Power profile: $profile"
+
+if (( ${#classes[@]} == 0 )); then
+    class_json="[]"
+else
+    class_json=$(printf '"%s",' "${classes[@]}")
+    class_json="[${class_json%,}]"
+fi
+
+# Minimal JSON string escaping: backslash, double-quote, and the one literal
+# newline this script inserts (between the capacity line and the profile
+# line) are the only characters these inputs -- percentages, upower's
+# plain-ASCII time strings, powerprofilesctl's fixed profile names -- could
+# ever contain that would break the JSON.
+esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | sed ':a;N;$!ba; s/\n/\\n/g'; }
+
+printf '{"text":"%s","tooltip":"%s","class":%s,"percentage":%s}\n' \
+    "$(esc "$text")" "$(esc "$tooltip")" "$class_json" "$percentage"

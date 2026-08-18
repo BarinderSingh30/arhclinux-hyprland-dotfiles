@@ -176,8 +176,7 @@ tooltip label {
 #network,
 #memory,
 #cpu,
-#power-profiles-daemon,
-#battery,
+#custom-battery,
 #custom-power {
     padding: 0 10px;
     background-color: transparent;
@@ -191,7 +190,6 @@ tooltip label {
 #network                { color: @cyan;    }
 #memory                 { color: @teal;    }
 #cpu                    { color: @orange;  }
-#power-profiles-daemon  { color: @purple;  }
 
 /* The power button sits quiet until you reach for it. Colouring it red
    permanently would put a standing alarm in the corner of a bar that is
@@ -212,12 +210,15 @@ tooltip label {
 }
 
 /* Hover lifts the background only. Setting `color: @fg` here as well would
-   throw away the module colour at exactly the moment the pointer is on it. */
+   throw away the module colour at exactly the moment the pointer is on it.
+   #custom-battery joined this group when it started reacting to clicks
+   (power-profile-cycle) -- the native battery module never did, so it
+   never needed the cue. */
 #wireplumber:hover,
 #network:hover,
 #memory:hover,
 #cpu:hover,
-#power-profiles-daemon:hover {
+#custom-battery:hover {
     background-color: @bg-hl;
 }
 
@@ -240,19 +241,19 @@ tooltip label {
     color: @urgent;
 }
 
-#battery {
+#custom-battery {
     color: @good;
 }
 
-#battery.charging {
+#custom-battery.charging {
     color: @accent;
 }
 
-#battery.warning:not(.charging) {
+#custom-battery.warning:not(.charging) {
     color: @warning;
 }
 
-#battery.critical:not(.charging) {
+#custom-battery.critical:not(.charging) {
     color: @urgent;
     animation: blink 1s steps(2, start) infinite;
 }

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+#
+# power-profile-cycle -- cycle power-profiles-daemon: performance -> balanced
+# -> power-saver -> performance ...
+#
+# Used as the battery module's on-click. Waybar's own power-profiles-daemon
+# module used to show this as a second icon and cycled natively on click;
+# that icon was dropped to keep the bar shorter, and this script reproduces
+# the same cycling behaviour from the battery click instead. A notify-send
+# on change is the only feedback now that there's no persistent icon for it.
+#
+# Switching needs no password on this machine: verified with
+#   pkcheck --action-id org.freedesktop.login1.power-off --process $$
+# and by round-tripping `powerprofilesctl set balanced` and back.
+
+set -euo pipefail
+
+die() { printf '\033[31mpower-profile-cycle:\033[0m %s\n' "$*" >&2; exit 1; }
+
+command -v powerprofilesctl >/dev/null || die "powerprofilesctl not found"
+
+order=(performance balanced power-saver)
+
+current=$(powerprofilesctl get)
+
+next=${order[0]}
+for i in "${!order[@]}"; do
+    if [[ ${order[$i]} == "$current" ]]; then
+        next=${order[$(( (i + 1) % ${#order[@]} ))]}
+        break
+    fi
+done
+
+powerprofilesctl set "$next"
+command -v notify-send >/dev/null && notify-send -a power-profile-cycle "Power profile: $next"
