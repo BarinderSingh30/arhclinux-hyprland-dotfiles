@@ -10,14 +10,18 @@
 local mod = "SUPER"
 
 local terminal    = "kitty"
--- `env -u QT_QPA_PLATFORMTHEME` keeps Dolphin at its stock light theme, the
--- same opt-out the dolphin/ stow package applies to the other launch routes.
+-- `QT_QPA_PLATFORMTHEME=gtk3` is what makes Dolphin follow the palette: Qt
+-- builds its QPalette from the GTK theme, which theme-set already generates.
+-- qt6ct (the session-wide default) does NOT work for Dolphin -- the dolphin/
+-- stow package's .desktop file records the three routes that were measured
+-- and failed, so read that before changing this.
+--
 -- It has to be repeated HERE because a Hyprland bind execs the binary
 -- directly and never reads a .desktop file, so the override in
 -- ~/.local/share/applications does not apply to SUPER+E. Without this, the
--- keybind is the one route that still starts a themed Dolphin -- which is
+-- keybind is the one route that disagrees with the other two -- which is
 -- exactly how this was missed the first time round.
-local fileManager = "env -u QT_QPA_PLATFORMTHEME dolphin"
+local fileManager = "env QT_QPA_PLATFORMTHEME=gtk3 dolphin"
 local menu        = "rofi -show drun"
 
 -- Scripts from this repo must be called by ABSOLUTE path.
