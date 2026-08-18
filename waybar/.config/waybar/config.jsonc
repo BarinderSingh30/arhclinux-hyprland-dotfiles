@@ -103,11 +103,15 @@
             "tooltip-format-wifi": "{essid}  {ipaddr}/{cidr}\n{bandwidthDownBits} / {bandwidthUpBits}",
             "tooltip-format-ethernet": "{ifname}  {ipaddr}/{cidr}",
             "tooltip-format-disconnected": "offline",
-            // Themed rofi picker (scripts/.local/bin/wifi-menu) rather than
-            // nmtui: scan, connect, forget, radio toggle, all through rofi's
-            // existing palette. $HOME because waybar's spawn shell doesn't
+            // wifi-qt (wifi-qt-src/, built via `make -C ~/dotfiles/wifi-qt-src
+            // install`) rather than the old rofi picker: scan, connect,
+            // forget, radio toggle, in a real floating Qt window that
+            // inherits the same vibrant qt6ct stylesheet as pavucontrol-qt
+            // (theme-src/templates/qt-apps.qss.in). wifi-qt-toggle opens it
+            // or closes it if already open, same as mixer-toggle for the
+            // volume mixer. $HOME because waybar's spawn shell doesn't
             // inherit ~/.local/bin on PATH.
-            "on-click": "$HOME/.local/bin/wifi-menu"
+            "on-click": "$HOME/.local/bin/wifi-qt-toggle"
         },
 
         "memory": {
@@ -223,7 +227,7 @@
             "format-disconnected": "󰖪",
             "tooltip-format-wifi": "{essid}  {ipaddr}/{cidr}",
             "tooltip-format-disconnected": "offline",
-            "on-click": "$HOME/.local/bin/wifi-menu"
+            "on-click": "$HOME/.local/bin/wifi-qt-toggle"
         },
 
         "memory": {

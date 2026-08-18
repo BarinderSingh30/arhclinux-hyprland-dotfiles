@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+#
+# wifi-qt-toggle -- open wifi-qt, or close it if it's already open.
+#
+# Same shape as mixer-toggle: waybar's on-click has no concept of "this app
+# is already running," so without this the network module would stack a new
+# window every click instead of behaving like a toggle.
+
+set -euo pipefail
+
+die() { printf '\033[31mwifi-qt-toggle:\033[0m %s\n' "$*" >&2; exit 1; }
+
+bin="$HOME/.local/bin/wifi-qt"
+[[ -x $bin ]] || die "$bin not found (build it: make -C ~/dotfiles/wifi-qt-src install)"
+
+if pgrep -x wifi-qt >/dev/null; then
+    pkill -x wifi-qt
+else
+    "$bin" &
+    disown
+fi

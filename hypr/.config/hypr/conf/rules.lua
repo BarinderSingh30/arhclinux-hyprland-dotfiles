@@ -30,7 +30,7 @@ hl.window_rule({
 
 hl.window_rule({
     name  = "float-utility-classes",
-    match = { class = "^(org.kde.polkit-kde-authentication-agent-1|blueman-manager|nm-connection-editor|pavucontrol|pavucontrol-qt)$" },
+    match = { class = "^(org.kde.polkit-kde-authentication-agent-1|blueman-manager|nm-connection-editor|pavucontrol|pavucontrol-qt|wifi-qt)$" },
     float = true,
 })
 
@@ -38,16 +38,16 @@ hl.window_rule({
 -- BAR_OPACITY (see theme-src/palettes/*.env): this machine's Iris Plus G1
 -- makes blur a real per-frame cost, transparency without it is free.
 hl.window_rule({
-    name    = "mixer-transparency",
-    match   = { class = "^(pavucontrol-qt)$" },
+    name    = "qt-app-transparency",
+    match   = { class = "^(pavucontrol-qt|wifi-qt)$" },
     opacity = "0.90 0.90",
 })
 
 -- Waybar click target. Opens a TUI in a throwaway kitty window
 -- (`kitty --class btop`), so it wants to float centered rather than resize
 -- the tiled layout underneath it. (nmtui used to share this rule; the
--- network module now opens scripts/.local/bin/wifi-menu in rofi instead,
--- which floats on its own via rofi's own window config.)
+-- network module now opens wifi-qt instead -- see float-utility-classes
+-- and qt-app-transparency above.)
 hl.window_rule({
     name   = "float-tui-popups",
     match  = { class = "^(btop)$" },
