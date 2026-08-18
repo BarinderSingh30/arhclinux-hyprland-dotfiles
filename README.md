@@ -358,13 +358,11 @@ silently ignored, so if a setting appears to do nothing, suspect the syntax firs
   ```sh
   systemctl --user restart wireplumber && sleep 8 && amixer -c0 sget Speaker
   ```
-  The fix is the `audio/` stow package: `speaker-unmute.service`, a user unit ordered
-  `After=wireplumber.service` and `WantedBy=wireplumber.service`, which re-asserts the unmute for a
-  few seconds after WirePlumber settles. It re-runs on every WirePlumber restart, not just at login.
-
-  **Do not "fix" this by disabling UCM** with `api.alsa.use-ucm = false` in a
-  `monitor.alsa.rules` drop-in. Tried 2026-08-18: ACP falls back to a bare `stereo-fallback`
-  profile and **all three HDMI outputs disappear**. Reverted.
+  **This is all moot now** — the card no longer uses UCM at all. See the UCM bypass note below,
+  which removes this failure mode along with several others. A `speaker-unmute.service` user unit
+  was the interim workaround and has been deleted: under ACP, PipeWire restores the Speaker mixer
+  itself (verified by muting Speaker by hand and restarting wireplumber — it came back at 100%).
+  The history is kept here only so the symptom is recognisable if UCM is ever re-enabled.
 
   Two things look like the bug and are **not**. `dmesg` reports `speaker_outs=0` with
   `line_outs=1 (0x17) type:speaker` — the Conexant autoconfig classifies the internal speaker pin
@@ -431,19 +429,15 @@ silently ignored, so if a setting appears to do nothing, suspect the syntax firs
   availability *before* priority when choosing a default, so it skipped the built-in output and
   fell through to HDMI1, playing to a monitor with no speakers. Measured 2026-08-18: setting the
   HDMI sinks to `priority.session = 100` against the analog sink's `1000` changed nothing — the
-  default stayed HDMI1. **Do not retry the priority route.** What works is disabling the HDMI sink
-  nodes outright, in `audio/`:
-  ```
-  audio/.config/wireplumber/wireplumber.conf.d/51-hdmi-no-default.conf   # node.disabled = true
-  audio/.config/systemd/user/speaker-unmute.service                      # re-unmutes after UCM
-  ```
-  The cost is that HDMI audio is gone entirely; this display has no speakers, so nothing is lost
-  here. Delete the file and restart wireplumber to get it back.
+  default stayed HDMI1. **Do not retry the priority route.** Disabling the HDMI
+  nodes was the first fix and it worked, but it was superseded — bypassing UCM (below) removes the
+  HDMI sinks anyway *and* gives the speakers a real always-available port, which the node-disable
+  approach did not.
 
-  The three-way interaction to keep in mind when any of this is touched: streams follow the default
-  sink (`node.stream.restore-target = false`), the default is auto-selected with **no** configured
-  pin in `default-nodes`, and HDMI is disabled so the built-in output is the only wired candidate.
-  Bluetooth still wins automatically when connected, because its sink outranks the analog one.
+  The interaction to keep in mind when any of this is touched: streams follow the default sink
+  (`node.stream.restore-target = false`), the default is auto-selected with **no** configured pin in
+  `default-nodes`, and the analog sink is a valid target because ACP gives it an
+  `analog-output-speaker` port. Bluetooth still wins automatically when connected.
   Re-pinning a default with `pactl set-default-sink` breaks that chain — see the Bluetooth note.
 - **ALSA card indices are not stable — never write `-c0` in anything that persists.** Plugging in
   any USB audio device claims card 0 at boot and pushes the built-in codec to card 1:
@@ -475,3 +469,66 @@ silently ignored, so if a setting appears to do nothing, suspect the syntax firs
   `pactl list sink-inputs` reports **no streams at all** while the app still shows as a PipeWire
   client in `wpctl status`. PipeWire is fine in that state and a test tone will play normally;
   only the app is stuck. Restart the app, not the machine.
+- **`speaker-test`'s built-in sine is too quiet to judge speakers by.** It generates at a low
+  amplitude, so on these laptop speakers it sits down in the noise floor: what you hear is hiss
+  with a faint tone under it, which is easily mistaken for "the speakers output static instead of
+  audio". Chasing that on 2026-08-18 nearly led to swapping the SOF driver for legacy HDA, when
+  nothing was wrong. Generate a real signal instead, and judge with actual content (a browser tab)
+  as the control:
+  ```sh
+  python3 -c "
+  import math,struct,wave
+  w=wave.open('/tmp/t.wav','w'); w.setnchannels(2); w.setsampwidth(2); w.setframerate(48000)
+  w.writeframes(b''.join(struct.pack('<hh',*([int(0.85*32767*math.sin(2*math.pi*440*n/48000))]*2))
+                for n in range(48000*10))); w.close()"
+  pw-play --target <sink-id> /tmp/t.wav
+  ```
+- **`pw-play` refuses the built-in sink with "no target node available".** Because the analog
+  sink's only port reads "not available" with an empty headphone jack, WirePlumber does not treat
+  it as a valid automatic target — `wpctl status` shows **no `*`** next to it even while
+  `pactl get-default-sink` names it. Native PipeWire clients then fail outright, while
+  PulseAudio-API clients (browsers, `pipewire-alsa`) are still routed there and play fine. Pass
+  `--target <id>` explicitly when testing; this is a quirk of the test tool, not a fault to fix.
+- **UCM is bypassed on the built-in card, and that is the fix that made audio behave.**
+  `audio/.config/wireplumber/wireplumber.conf.d/50-alsa-no-ucm.conf` sets
+  `api.alsa.use-ucm = false` for `alsa_card.pci-0000_00_1f.3-platform-skl_hda_dsp_generic`.
+
+  Under UCM the analog sink had a single `[Out] Headphones` port whose availability tracked the
+  3.5mm jack. Empty jack meant "not available", which meant **no valid default sink existed at
+  all** (`wpctl status` showed no `*` anywhere). Disconnecting Bluetooth then destroyed the playing
+  stream instead of moving it — the laptop went silent and the app had to be restarted. Native
+  PipeWire clients also failed outright with `no target node available`, while PulseAudio-API
+  clients still played. The speakers were never a port, because UCM puts Speaker and Headphones on
+  the same PCM and PipeWire keeps only the higher-priority one (Headphones 200 > Speaker 100).
+
+  Without UCM, ACP builds the ordinary analog profile and everything falls into place:
+  ```
+  analog-output-speaker     priority 10000  availability unknown   <- always usable, active
+  analog-output-headphones  priority  9900  follows the jack
+  ```
+  Verified 2026-08-18 with a tone playing throughout: connecting the buds moved the stream to them
+  within 3s, disconnecting moved it straight back to the speakers, and the stream survived both.
+  ACP also drives the mixer, so no unmute unit is needed.
+
+  Accepted costs: the three HDMI audio outputs are gone (this display has no speakers) and the
+  digital mic array is not exposed, so the built-in microphone does not work — only UCM maps those
+  PCMs. The Bluetooth headset mic still does. Delete the file and restart wireplumber to return to
+  UCM and get the internal mic back.
+- **A route WirePlumber has never seen before starts at 6.4% volume, which is silent here.**
+  `device.routes.default-sink-volume` ships as `0.064`. This codec's mixer spans -74 dB in 74
+  steps, so 6.4% is far below audibility on the built-in speakers — the output is correct and
+  simply cannot be heard. It looks exactly like broken hardware, and it fires whenever a *new*
+  route appears: a card profile change, the UCM bypass landing, a fresh install. Diagnosed
+  2026-08-18 after the speakers stayed silent through a Bluetooth failover while `pactl` reported
+  the sink `RUNNING` on `analog-output-speaker`. Raised to a usable default:
+  ```sh
+  wpctl settings --save device.routes.default-sink-volume 0.65
+  wpctl settings device.routes.default-sink-volume        # -> Value: 0.65 (Saved: 0.65)
+  ```
+  When speakers are "silent", read the **codec amp** before suspecting the driver — it is the
+  ground truth and it maps to what you can actually hear:
+  ```sh
+  awk '/^Node 0x11 /,/^  Connection/' /proc/asound/card0/codec#0 | grep Amp-Out
+  ```
+  `0x4a` = 0 dB, clean and loud · `0x38` barely audible · `0x33` inaudible on these speakers ·
+  `0x1e` nothing. Anything below roughly `0x40` will be reported as "no sound from the speakers".
