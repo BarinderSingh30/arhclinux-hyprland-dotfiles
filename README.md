@@ -445,3 +445,27 @@ silently ignored, so if a setting appears to do nothing, suspect the syntax firs
   pin in `default-nodes`, and HDMI is disabled so the built-in output is the only wired candidate.
   Bluetooth still wins automatically when connected, because its sink outranks the analog one.
   Re-pinning a default with `pactl set-default-sink` breaks that chain — see the Bluetooth note.
+- **ALSA card indices are not stable — never write `-c0` in anything that persists.** Plugging in
+  any USB audio device claims card 0 at boot and pushes the built-in codec to card 1:
+  ```
+  0 [RMX2001  ]: USB-Audio - realme RMX2001      <- phone on USB
+  1 [sofhdadsp]: sof-hda-dsp - IL-SwiftSF314_57  <- the actual laptop codec
+  ```
+  This is nastier than it looks because `amixer -c0 sset Speaker unmute` then unmutes the **phone**
+  and still **exits 0**, so `speaker-unmute.service` reported `Result=success` while the laptop
+  speakers stayed silent. Symptom seen 2026-08-18: speakers worked before a reboot, dead after one,
+  with a green systemd unit and a `sudo alsactl store` state file that both looked correct.
+  Address the card by name everywhere — `amixer -c sofhdadsp` — and check `/proc/asound/cards`
+  first whenever a mixer command "works" but nothing changes.
+- **`speaker-test` exits 0 even when it never opened the device.** There is no `pulse` ALSA PCM on
+  this machine — `pipewire-alsa` provides `pipewire` and `default`, nothing else — so
+  `speaker-test -D pulse` fails with `Unknown PCM pulse` / `Playback open error: -2` and **still
+  returns exit status 0**. Redirect stderr to `/dev/null` and it looks like a successful test while
+  producing no sound whatsoever. This wasted a diagnosis round on 2026-08-18, "confirming" working
+  audio that was never played. Use `-D default` (or `-D pipewire`), never `-D pulse`, and confirm
+  the sink actually left `SUSPENDED` rather than trusting the command:
+  ```sh
+  (speaker-test -D default -c 2 -t sine -f 440 -l 1 &) ; sleep 2
+  pactl list sinks short          # the target sink must read RUNNING
+  pactl list sink-inputs          # and a stream must exist on it
+  ```
