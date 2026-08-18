@@ -20,10 +20,12 @@ hl.config({
         focus_on_activate          = true,
         mouse_move_focuses_monitor = true,
 
-        -- Terminal swallowing: launching a GUI app from kitty hides the
-        -- terminal until the app exits, instead of leaving a dead pane tiled.
-        enable_swallow = true,
-        swallow_regex  = "^(kitty)$",
+        -- Terminal swallowing was on (launching a GUI app from kitty hid the
+        -- terminal until the app exited), but that meant the terminal you
+        -- ran e.g. blueman-manager from would disappear the moment it
+        -- popped up -- turned off by request: no window should hide just
+        -- because another one opened.
+        enable_swallow = false,
 
         -- Warn when an app stops responding rather than leaving a frozen window.
         enable_anr_dialog = true,
