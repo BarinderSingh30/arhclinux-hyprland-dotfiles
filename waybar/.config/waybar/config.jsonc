@@ -97,9 +97,11 @@
             "tooltip-format-wifi": "{essid}  {ipaddr}/{cidr}\n{bandwidthDownBits} / {bandwidthUpBits}",
             "tooltip-format-ethernet": "{ifname}  {ipaddr}/{cidr}",
             "tooltip-format-disconnected": "offline",
-            // nmtui ships with networkmanager, so this needs nothing extra.
-            // conf/rules.lua floats and centers the class.
-            "on-click": "kitty --class nmtui -e nmtui"
+            // Themed rofi picker (scripts/.local/bin/wifi-menu) rather than
+            // nmtui: scan, connect, forget, radio toggle, all through rofi's
+            // existing palette. $HOME because waybar's spawn shell doesn't
+            // inherit ~/.local/bin on PATH.
+            "on-click": "$HOME/.local/bin/wifi-menu"
         },
 
         "memory": {
@@ -234,7 +236,7 @@
             "format-disconnected": "󰖪",
             "tooltip-format-wifi": "{essid}  {ipaddr}/{cidr}",
             "tooltip-format-disconnected": "offline",
-            "on-click": "kitty --class nmtui -e nmtui"
+            "on-click": "$HOME/.local/bin/wifi-menu"
         },
 
         "memory": {

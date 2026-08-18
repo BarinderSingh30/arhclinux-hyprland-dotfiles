@@ -34,12 +34,14 @@ hl.window_rule({
     float = true,
 })
 
--- Waybar click targets. Both open a TUI in a throwaway kitty window
--- (`kitty --class <name>`), so they want to float centered rather than
--- resize the tiled layout underneath them.
+-- Waybar click target. Opens a TUI in a throwaway kitty window
+-- (`kitty --class btop`), so it wants to float centered rather than resize
+-- the tiled layout underneath it. (nmtui used to share this rule; the
+-- network module now opens scripts/.local/bin/wifi-menu in rofi instead,
+-- which floats on its own via rofi's own window config.)
 hl.window_rule({
     name   = "float-tui-popups",
-    match  = { class = "^(nmtui|btop)$" },
+    match  = { class = "^(btop)$" },
     float  = true,
     center = true,
     size   = "960 640",
