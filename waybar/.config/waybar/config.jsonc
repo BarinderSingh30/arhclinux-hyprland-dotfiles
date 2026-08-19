@@ -137,9 +137,11 @@
             "tooltip-format-disconnected": "offline",
             // wifi-qt (wifi-qt-src/, built via `make -C ~/dotfiles/wifi-qt-src
             // install`) rather than the old rofi picker: scan, connect,
-            // forget, radio toggle, in a real floating Qt window that
-            // inherits the same vibrant qt6ct stylesheet as pavucontrol-qt
-            // (theme-src/templates/qt-apps.qss.in). wifi-qt-toggle opens it
+            // forget, radio toggle, in a real floating Qt window that gets
+            // the same vibrant stylesheet as pavucontrol-qt
+            // (theme-src/templates/qt-apps.qss.in) -- passed by the toggle
+            // script as `-stylesheet`, not by qt6ct, which would apply it to
+            // every Qt6 app including the KDE ones. wifi-qt-toggle opens it
             // or closes it if already open, same as mixer-toggle for the
             // volume mixer. $HOME because waybar's spawn shell doesn't
             // inherit ~/.local/bin on PATH.

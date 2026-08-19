@@ -39,9 +39,19 @@ cursor_flash_time=1000
 double_click_interval=400
 wheel_scroll_lines=3
 force_raster_widgets=false
-; Applies to any Qt6 app using qt6ct -- see the header comment in
-; qt-apps.qss.in for which apps that currently means. loadStyleSheets() in
-; qt6ct's platform theme plugin does a literal QFile::exists() on this value,
-; not a search-path lookup, so it must be the absolute path, not a bare filename
-; (verified against upstream qt6ctplatformtheme.cpp, not guessed).
-stylesheets=@THEME_DIR@/qt-apps.qss
+;
+; NOTE: there is deliberately no `stylesheets=` key here.
+;
+; qt6ct applies that stylesheet to EVERY Qt6 app that uses qt6ct as its
+; platform theme -- there is no per-app scoping in it. qt-apps.qss is written
+; for pavucontrol-qt and wifi-qt, two small floating utilities that the
+; compositor blends (conf/rules.lua), so it sets `QWidget { background:
+; transparent; }` and paints checked tool buttons with @URGENT@. Leaking that
+; into Dolphin, Gwenview and Okular knocked out every pane background and
+; turned their toggled toolbar buttons pink -- half the reason KDE apps were
+; unreadable here (the other half was the missing KDE color scheme; see
+; kde-colors.colors.in).
+;
+; The stylesheet is now passed per app instead, via Qt's built-in
+; `-stylesheet <file>` argument, from scripts/.local/bin/mixer-toggle and
+; wifi-qt-toggle -- the only two places either app is launched.

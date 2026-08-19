@@ -3,6 +3,16 @@
 #
 # Purpose: theme Dolphin from the palette, via GTK rather than via qt6ct.
 #
+# SUPERSEDED 2026-08-19 -- kept only because removing it is a separate change.
+# KDE apps are now themed by a real KDE color scheme
+# (theme-src/templates/kde-colors.colors.in), and KColorSchemeManager sets the
+# palette AFTER the platform theme, so Dolphin looks the same on gtk3 or on
+# qt6ct. See README "System notes". The "measured and FAILED" list below is
+# accurate about what was tried but WRONG in its conclusion: kdeglobals is not
+# inert, it just holds a pointer -- `[UiSettings] ColorScheme` naming a
+# .colors file in a scanned color-schemes/ directory -- not the colors
+# themselves, and .colors wants decimal R,G,B rather than hex.
+#
 # conf/env.lua exports QT_QPA_PLATFORMTHEME=qt6ct session-wide. That is right
 # for pavucontrol-qt and wifi-qt but WRONG for Dolphin, so this file swaps the
 # value to gtk3 for Dolphin alone. Qt's gtk3 platform theme (libqgtk3.so, part

@@ -48,9 +48,17 @@ warn() { printf '\033[33m::\033[0m %s\n' "$*" >&2; }
 #
 # conf/theme.lua is written back into the REPO, not ~/.config, so a bare
 # clone + stow yields a working compositor before theme-set has ever run.
+#
+# The KDE color scheme is a third shape: it goes under XDG_DATA_HOME, not
+# XDG_CONFIG_HOME, because KColorSchemeModel finds schemes by SCANNING
+# `<data dirs>/color-schemes/*.colors` -- no app names the file, so the
+# directory is the interface. The filename is fixed at Rice.colors on purpose;
+# see the header of kde-colors.colors.in. Pointing kdeglobals at it is a
+# separate step, down in the reload section, because KDE owns that file.
 # ---------------------------------------------------------------------------
 targets() {
     local cfg="${XDG_CONFIG_HOME:-$HOME/.config}"
+    local data="${XDG_DATA_HOME:-$HOME/.local/share}"
     cat <<EOF
 hypr-theme.lua.in        $DOTFILES/hypr/.config/hypr/conf/theme.lua
 hyprpaper.conf.in        $cfg/hypr/hyprpaper.conf
@@ -64,6 +72,7 @@ gtk4-settings.ini.in     $cfg/gtk-4.0/settings.ini
 qt6ct.conf.in            $cfg/qt6ct/qt6ct.conf
 qt6ct-colors.conf.in     $cfg/qt6ct/colors/theme.conf
 qt-apps.qss.in           $OUT/qt-apps.qss
+kde-colors.colors.in     $data/color-schemes/Rice.colors
 starship.toml.in         $cfg/starship.toml
 fzf-opts.conf.in         $OUT/fzf.conf
 bat-config.in            $cfg/bat/config
@@ -156,9 +165,23 @@ P[THEME_DIR]=$OUT
 # Render.
 # ---------------------------------------------------------------------------
 # One sed program built once from the palette, applied to every template.
+#
+# Every 6-hex-digit value also gets a decimal `@KEY_RGB@` form. KDE color
+# schemes (.colors) accept only `R,G,B` -- hex there is silently ignored and
+# the app falls back to a Breeze default -- and sed cannot convert a number,
+# so the conversion has to happen here. Deriving it keeps palettes storing
+# each color exactly once, per the contract in palettes/*.env.
+#
+# The `_RGB` suffix is therefore RESERVED: a palette must not define both
+# FOO and FOO_RGB, or the two rules would collide.
 SED_PROG=$(for k in "${!P[@]}"; do
+    v=${P[$k]}
     # '|' as delimiter: hex values and theme names never contain it.
-    printf 's|@%s@|%s|g\n' "$k" "${P[$k]//|/\\|}"
+    printf 's|@%s@|%s|g\n' "$k" "${v//|/\\|}"
+    if [[ $v =~ ^[0-9a-fA-F]{6}$ ]]; then
+        printf 's|@%s_RGB@|%d,%d,%d|g\n' "$k" \
+            "$((16#${v:0:2}))" "$((16#${v:2:2}))" "$((16#${v:4:2}))"
+    fi
 done)
 
 STAGE=$(mktemp -d) ; trap 'rm -rf "$STAGE"' EXIT
@@ -292,6 +315,33 @@ if command -v gsettings >/dev/null; then
     gsettings set org.gnome.desktop.interface cursor-theme "${P[CURSOR_THEME]}"   2>/dev/null || true
     gsettings set org.gnome.desktop.interface cursor-size  "${P[CURSOR_SIZE]}"    2>/dev/null || true
     gsettings set org.gnome.desktop.interface font-name    "${P[FONT_UI]} ${P[FONT_SIZE]}" 2>/dev/null || true
+fi
+
+# KF6 apps (Dolphin, Gwenview, Okular, the polkit agent) ignore the qt6ct
+# palette: KColorSchemeManager replaces it at startup with whatever
+# `[UiSettings] ColorScheme` in kdeglobals names, and with that key unset it
+# loads its own bundled LIGHT Breeze -- which is what made those apps
+# unreadable. Point it at the scheme rendered above.
+#
+# Written with kwriteconfig6 rather than as a generated file: kdeglobals is
+# KDE's, and apps write their own keys into it (KColorSchemeManager itself
+# saves here when a scheme is picked from an app's Settings menu). Installing a
+# whole file over it would drop those. kwriteconfig6 ships with kconfig, which
+# is already a dependency of the apps this is for.
+#
+# The value is the scheme ID, which KColorSchemeModel takes from the FILENAME
+# (Rice.colors), not from the Name inside it -- so it stays "Rice" across
+# palette switches and this line never needs to change.
+#
+# Only affects apps started afterwards; KColorSchemeManager reads this once at
+# startup and does not watch the file.
+if command -v kwriteconfig6 >/dev/null; then
+    if kwriteconfig6 --file kdeglobals --group UiSettings --key ColorScheme Rice 2>/dev/null
+    then info "kdeglobals: KDE apps pointed at color scheme 'Rice'"
+    else warn "kwriteconfig6 failed -- KDE apps will fall back to light Breeze"
+    fi
+else
+    warn "kwriteconfig6 not found -- KDE apps will fall back to light Breeze"
 fi
 
 info "active palette: $PALETTE"

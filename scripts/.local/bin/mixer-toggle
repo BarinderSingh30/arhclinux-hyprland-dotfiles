@@ -16,13 +16,30 @@
 
 set -euo pipefail
 
-die() { printf '\033[31mmixer-toggle:\033[0m %s\n' "$*" >&2; exit 1; }
+die()  { printf '\033[31mmixer-toggle:\033[0m %s\n' "$*" >&2; exit 1; }
+warn() { printf '\033[33mmixer-toggle:\033[0m %s\n' "$*" >&2; }
 
 command -v pavucontrol-qt >/dev/null || die "pavucontrol-qt not found"
 
+# The vibrant stylesheet is passed here rather than through qt6ct's
+# `stylesheets=` key, because that key is global to every Qt6 app on qt6ct and
+# this sheet is written for this window specifically -- it makes widget
+# backgrounds transparent, which is right under the compositor opacity rule in
+# conf/rules.lua and wrong everywhere else. `-stylesheet` is plain QApplication
+# argument handling, nothing pavucontrol-qt has to support.
+#
+# Guarded on the file: theme-set renders it, and a Qt app given a missing
+# -stylesheet path just warns and starts unstyled, but silently unstyled is
+# exactly the confusing state worth naming out loud.
+QSS="${XDG_CONFIG_HOME:-$HOME/.config}/theme/qt-apps.qss"
+
 if pgrep -x pavucontrol-qt >/dev/null; then
     pkill -x pavucontrol-qt
+elif [[ -f $QSS ]]; then
+    pavucontrol-qt -stylesheet "$QSS" &
+    disown
 else
+    warn "$QSS missing (run theme-set) -- opening unstyled"
     pavucontrol-qt &
     disown
 fi

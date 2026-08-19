@@ -35,7 +35,8 @@ Where to make a given change:
 | the launcher | `rofi/.config/rofi/config.rasi` | nothing |
 | terminal behaviour (not color) | `kitty/.config/kitty/kitty.conf` | new kitty window |
 | how transparent an app's window is | not the palette — see **Transparency** below | varies |
-| how Dolphin is themed | `dolphin/` + `fileManager` in `conf/binds.lua` | reopen Dolphin |
+| how KDE apps look (Dolphin, Gwenview, Okular) | `theme-src/templates/kde-colors.colors.in` | `theme-set`, then reopen the app |
+| how pavucontrol-qt / wifi-qt look | `theme-src/templates/qt-apps.qss.in` | `theme-set`, then reopen the app |
 
 **Read "System notes" at the bottom before debugging anything that "should work".** Every entry
 there is a trap that already cost a debugging session — Hyprland spawning commands without your
@@ -65,28 +66,23 @@ dolphin/.local/share/applications/       → ~/.local/share/applications/
 dolphin/.config/systemd/user/            → ~/.config/systemd/user/
 ```
 
-`dolphin/` ships no colors. It just switches Dolphin from `QT_QPA_PLATFORMTHEME=qt6ct` (the
-session-wide default, set in `conf/env.lua`) to `gtk3`, for Dolphin alone. Qt's gtk3 platform
-theme — `libqgtk3.so`, already part of `qt6-base`, nothing extra installed — builds the Qt
-palette from the **GTK theme**, so Dolphin ends up matching the GTK apps instead of fighting
-Qt. pavucontrol-qt and wifi-qt keep qt6ct and are untouched.
+`dolphin/` ships no colors. It switches Dolphin from `QT_QPA_PLATFORMTHEME=qt6ct` (the
+session-wide default, set in `conf/env.lua`) to `gtk3`, for Dolphin alone, via a `.desktop`
+override plus a systemd drop-in. It also needs `fileManager` in
+`hypr/.config/hypr/conf/binds.lua` to agree, because a Hyprland bind execs the binary directly
+and never reads a `.desktop` file — missing that is why `SUPER+E` stayed unthemed once already.
 
-Note what this does and does not follow: Dolphin tracks `GTK_THEME` (currently `adw-gtk3-dark`
-in *both* palettes), **not** the palette's hex values. Switching `theme-set gruvbox` therefore
-does not recolor Dolphin — both palettes name the same GTK theme, so it looks identical. A
-palette naming a *light* GTK theme would flip Dolphin to light.
+**As of 2026-08-19 this package is redundant.** KDE apps are now themed from the palette through
+a real KDE color scheme (`theme-src/templates/kde-colors.colors.in`), and `KColorSchemeManager`
+sets the application palette *after* the platform theme has had its say — so Dolphin renders
+identically whether it starts on `gtk3` or on `qt6ct` (verified both ways, 2026-08-19). The
+package is harmless and was left in place rather than removed as a side effect of a bug fix.
+Removing it is `stow -D dolphin`, resetting `fileManager` to plain `"dolphin"`, then
+`systemctl --user daemon-reload` and `update-desktop-database ~/.local/share/applications`.
 
-Three files would be needed to cover every launch route, and only two live here — the third is
-`fileManager` in `hypr/.config/hypr/conf/binds.lua`, because a Hyprland bind execs the binary
-directly and never reads a `.desktop` file. Missing that is why `SUPER+E` stayed unthemed once
-already. The `.desktop` override covers rofi and "Open With"; the systemd drop-in covers D-Bus
-activation of `org.freedesktop.FileManager1` ("Show in folder" from Firefox), which inherits the
-`systemctl --user` activation environment instead. **All three must agree.**
-
-The `.desktop` file's header records the three routes that were measured and *failed* — qt6ct's
-palette, `kdeglobals`, and KDE's own `BreezeDark.colors` — so they do not get retried. Reverting
-to a stock light Dolphin is `stow -D dolphin` plus resetting `fileManager` to plain `"dolphin"`,
-then `systemctl --user daemon-reload` and `update-desktop-database ~/.local/share/applications`.
+Note the old route's limitation, which is why it is no longer the one in use: on `gtk3` Dolphin
+tracked `GTK_THEME` (`adw-gtk3-dark` in *both* palettes), **not** the palette's hex values, so
+`theme-set gruvbox` never recolored it. The color scheme does follow the palette.
 
 `zsh/.zshenv` is the one file that has to sit directly in `$HOME`. zsh reads its startup files
 from `$ZDOTDIR`, falling back to `$HOME` when that is unset — so the variable must be set somewhere
@@ -148,6 +144,7 @@ cannot execute anything.
 |---|---|
 | `~/.config/theme/{kitty.conf,rofi.rasi}` | the app supports `include`/`@import`, so its hand-written config pulls colors in and layout stays separate |
 | `~/.config/{waybar/style.css,swaync/style.css,gtk-3.0,gtk-4.0,qt6ct}` | no include mechanism (GTK, qt6ct) or a symlink-fragile one (waybar's GTK CSS needs an absolute `file://`). swaync additionally replaces its *whole* user style.css rather than layering on the system default, so a colors-only patch isn't an option there either. Whole file generated; the template is the source of truth |
+| `~/.local/share/color-schemes/Rice.colors` | KDE finds color schemes by *scanning* `<data dir>/color-schemes/*.colors` — no app names the file, the directory is the interface. Under `XDG_DATA_HOME`, not `XDG_CONFIG_HOME`. Filename fixed so `kdeglobals` never needs rewriting on a palette switch |
 | `hypr/.config/hypr/conf/theme.lua` — **in this repo** | a bare clone + stow must boot a working compositor before theme-set has ever run. A broken `hyprland.lua` means no desktop |
 | `~/.config/hypr/hyprpaper.conf` | hyprpaper doesn't expand `~`, so the absolute path is substituted in |
 | `~/.config/hypr/hyprlock.conf` | no include mechanism, and the lock screen should follow the palette |
@@ -360,26 +357,54 @@ silently ignored, so if a setting appears to do nothing, suspect the syntax firs
   notification name" and hit systemd's start-limit, because a leftover `mako` process (started
   before the removal) was still sitting on `org.freedesktop.Notifications`. `pgrep -x <old-daemon>`
   and kill it by PID before trusting a replacement daemon's dbus-activation to "just work".
-- **Dolphin is themed through `QT_QPA_PLATFORMTHEME=gtk3`, not qt6ct.** Everything else Qt6 uses
-  qt6ct; Dolphin is the one exception, wired up in the `dolphin/` package **and** in
-  `binds.lua`. The Qt-native routes were each measured on this machine 2026-08-18 and each
-  failed, so do not retry them:
-  - qt6ct's `custom_palette` never reaches Dolphin. Confirmed with the stylesheet disabled in an
-    isolated `XDG_CONFIG_HOME`, so QSS could not have been masking it.
-  - `~/.config/kdeglobals` is inert. `kreadconfig6` reads the values back correctly, so the file
-    is well-formed and found — nothing converts it into a `QPalette`. (KDE wants decimal
-    `R,G,B` there, not hex, which is a separate trap that wasted time first time round.)
-  - KDE's own `/usr/share/color-schemes/BreezeDark.colors`, copied in verbatim, still renders
-    light. That is the decisive one: the scheme file is not the problem.
-  - `qt-apps.qss` reaches the toolbar and sidebar but never the file-list pane, because
-    `KItemListView` is a `QGraphicsWidget` painting from a `KColorScheme`, not a styleable
-    `QWidget`. No QSS rule gets in, `#qt_scrollarea_viewport` included.
+- **KDE apps ignore the qt6ct palette. They take colors from a `.colors` scheme, and with none
+  set they load a bundled LIGHT Breeze.** This is the single cause behind "Dolphin/Gwenview/Okular
+  look wrong", and it was misdiagnosed once (2026-08-18) before being traced properly
+  (2026-08-19). Dolphin, Gwenview, Okular and the polkit agent all link `KF6ColorScheme`, and
+  every KF6 app runs `KColorSchemeManager` at startup. Its `init()` (kcolorscheme 6.29) does:
 
-  What applies KDE color schemes is `KDEPlatformTheme` from **plasma-integration**, which pulls
-  `kwin`, `plasma-workspace`, `kscreenlocker` and `krunner` — a second desktop, so it is not an
-  option here. `breeze` was installed chasing this and turned out **not** to be needed for the
-  gtk3 route; it is ~41 MiB of dead weight and can be removed with
+  ```
+  scheme = KSharedConfig::openConfig() -> "UiSettings" -> "ColorScheme"   # kdeglobals
+  if scheme.isEmpty():  schemePath = automaticColorSchemePath()
+  if !schemePath.isEmpty():
+      qApp->setPalette(KColorScheme::createApplicationPalette(openConfig(schemePath)))
+  ```
+
+  That `setPalette` runs **after** the platform theme, so it overwrites whatever qt6ct built —
+  which is why qt6ct's `custom_palette` "never reaches Dolphin". With the key unset,
+  `automaticColorSchemePath()` picks Breeze or BreezeDark off Qt's `colorScheme()` style hint,
+  and under `QT_QPA_PLATFORMTHEME=qt6ct` that hint reads **light** even though the XDG appearance
+  portal correctly reports dark (`dbus-send … portal.Settings.Read org.freedesktop.appearance
+  color-scheme` returns `1`). qt6ct does not forward it. Both Breeze schemes are compiled into
+  `kcolorscheme` as Qt resources, so this happens with `breeze` **not** installed and
+  `/usr/share/color-schemes/` absent — which is exactly this machine.
+
+  The fix is `theme-src/templates/kde-colors.colors.in` → `~/.local/share/color-schemes/Rice.colors`,
+  with `theme-set` pointing `kdeglobals` at it via `kwriteconfig6`. It reaches everything QSS
+  could not, Dolphin's `KItemListView` file pane included — that pane is a `QGraphicsWidget`
+  painting from a `KColorScheme`, so no QSS rule gets in, `#qt_scrollarea_viewport` included.
+
+  Two traps inside that, both of which produced "the file is ignored":
+  - `.colors` values are decimal `R,G,B`. Hex is silently dropped and the app falls back to a
+    Breeze default. `theme-set` derives a `_RGB` marker for every hex palette key so templates
+    stay on one source of truth; the suffix is reserved.
+  - Writing color groups straight into `kdeglobals` does nothing — `kreadconfig6` reads them back
+    fine, which is what makes it look well-formed. `kdeglobals` only holds the *pointer*
+    (`[UiSettings] ColorScheme`); the colors have to live in a `.colors` file in a scanned
+    `color-schemes/` directory.
+
+  `plasma-integration`'s `KDEPlatformTheme` is a *different* route to the same end, and still not
+  an option: it pulls `kwin`, `plasma-workspace`, `kscreenlocker` and `krunner`. `breeze` is not
+  needed either — it was installed chasing this in 2026-08-18 and is ~41 MiB of dead weight;
   `sudo pacman -Rs breeze` if you want the space back.
+- **`qt-apps.qss` is passed per app, never through qt6ct's `stylesheets=` key.** That key applies
+  a stylesheet to *every* Qt6 app on qt6ct — there is no per-app scoping in it. The sheet is
+  written for pavucontrol-qt and wifi-qt, so it sets `QWidget { background: transparent; }` and
+  paints checked tool buttons `@URGENT@`; leaking that into KDE apps knocked out every pane
+  background and turned Okular's toolbar pink. It now goes in via Qt's own `-stylesheet <file>`
+  argument from `mixer-toggle` and `wifi-qt-toggle`, the only two places either app is launched.
+  **A third app wanting this sheet must be launched with `-stylesheet` too** — putting the key
+  back in `qt6ct.conf.in` would re-break every KDE app.
 - **A long-lived Qt app keeps the stylesheet it launched with.** qt6ct reads
   `Interface/stylesheets` once at app startup, so a window opened before a `theme-set` run keeps
   the old look and can appear "half themed" next to freshly started apps. Restart the app before

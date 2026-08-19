@@ -8,14 +8,26 @@
 
 set -euo pipefail
 
-die() { printf '\033[31mwifi-qt-toggle:\033[0m %s\n' "$*" >&2; exit 1; }
+die()  { printf '\033[31mwifi-qt-toggle:\033[0m %s\n' "$*" >&2; exit 1; }
+warn() { printf '\033[33mwifi-qt-toggle:\033[0m %s\n' "$*" >&2; }
 
 bin="$HOME/.local/bin/wifi-qt"
 [[ -x $bin ]] || die "$bin not found (build it: make -C ~/dotfiles/wifi-qt-src install)"
 
+# Same as mixer-toggle: the stylesheet comes in per app rather than through
+# qt6ct's global `stylesheets=` key, which used to apply it to every Qt6 app
+# including the KDE ones it wrecked. `-stylesheet` is handled by QApplication
+# (wifi-qt-src/main.cpp constructs one with argc/argv), not by wifi-qt's own
+# option parsing.
+QSS="${XDG_CONFIG_HOME:-$HOME/.config}/theme/qt-apps.qss"
+
 if pgrep -x wifi-qt >/dev/null; then
     pkill -x wifi-qt
+elif [[ -f $QSS ]]; then
+    "$bin" -stylesheet "$QSS" &
+    disown
 else
+    warn "$QSS missing (run theme-set) -- opening unstyled"
     "$bin" &
     disown
 fi
