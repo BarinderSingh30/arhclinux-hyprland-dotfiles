@@ -38,6 +38,19 @@ hl.config({
         disable_scale_notification = true,
     },
 
+    xwayland = {
+        -- eDP-1 runs at 1.25x. XWayland clients (Steam, JDownloader -- any
+        -- app without a native Wayland backend) render a 1x buffer that
+        -- Hyprland then bitmap-stretches to fill the screen; that stretch is
+        -- the blur. This makes XWayland render straight at the monitor's
+        -- real scaled pixel size instead, so it never needs stretching.
+        -- Trade-off: apps that don't know to scale their own UI (most
+        -- older/simple XWayland apps) will draw it slightly smaller, since
+        -- they get more physical pixels but still assume 96dpi -- sharp text
+        -- at a mild size cost beats blur at 1.25x.
+        force_zero_scaling = true,
+    },
+
     general = {
         -- Snap floating windows to edges and to each other.
         snap = {

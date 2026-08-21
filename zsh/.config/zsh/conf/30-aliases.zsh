@@ -74,6 +74,13 @@ alias mkdir='mkdir -pv'          # create parents, and say what was created
 alias path='print -l $path'      # PATH, one entry per line
 alias reload='exec zsh'          # re-read this config in place
 
+# --- Postgres ---------------------------------------------------------------
+# postgresql.service is disabled (no auto-start on boot) to save RAM when
+# not actively developing against it. Start it only for the session you need it.
+alias pg-on='sudo systemctl start postgresql'
+alias pg-off='sudo systemctl stop postgresql'
+alias pg-status='systemctl status postgresql'
+
 # --- Pacman ---------------------------------------------------------------
 # The four commands actually used day to day. Spelled out rather than
 # abbreviated, because pacman's single-letter flags are easy to confuse and
