@@ -81,6 +81,14 @@ alias pg-on='sudo systemctl start postgresql'
 alias pg-off='sudo systemctl stop postgresql'
 alias pg-status='systemctl status postgresql'
 
+# --- Hyprland ---------------------------------------------------------------
+# `position` in a monitor rule is logical (post-scale) space, not physical
+# pixels, so a scaled monitor's real right/bottom edge has to be computed as
+# width/scale (+ x) rather than read off `hyprctl monitors`. This is what a
+# neighboring monitor's position must line up with, or a cursor dead zone
+# opens between them.
+alias monitors-logical-edge='hyprctl monitors -j | jq -r "[\"NAME\",\"X\",\"Y\",\"RIGHT_EDGE\",\"BOTTOM_EDGE\"], (.[] | [.name, .x, .y, (.width/.scale + .x), (.height/.scale + .y)]) | @tsv" | column -t'
+
 # --- Pacman ---------------------------------------------------------------
 # The four commands actually used day to day. Spelled out rather than
 # abbreviated, because pacman's single-letter flags are easy to confuse and
